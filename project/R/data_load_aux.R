@@ -121,6 +121,5 @@ data1 <- fread('./data/processed/IA_unis.csv',
 
 unis <- fread('./data/processed/IA_unis.csv', header = T,
               sep = ',', verbose=TRUE)
-unis <- select(unis, -V1)
 
 #No need to merge with master; just for plotting
