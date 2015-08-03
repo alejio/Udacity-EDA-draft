@@ -1,5 +1,5 @@
 
-# Load auxilliary establishments data in order to merge with main ---------
+# Load auxilliary data in order to merge with main ---------
 
 
 # Establishment data set --------------------------------------------------
@@ -109,5 +109,18 @@ setnames(weather_data, "STATION_NAME", "W_STATION_NAME")
 weather_data <- select(weather_data,
                        c(DATE, ZIPCODE, PRCP, SNOW, TMIN, TMAX))
 #Convert temps as there is something wrong! (to Celsius)
-weather_data$TMIN <- (weather_data$TMIN/10 - 32)*0.5556
-weather_data$TMAX <- (weather_data$TMAX/10 - 32)*0.5556
+#weather_data$TMIN <- (weather_data$TMIN/10 - 32)*0.5556
+#weather_data$TMAX <- (weather_data$TMAX/10 - 32)*0.5556
+
+
+data1 <- fread('./data/processed/IA_unis.csv',
+               header = T, sep = ',', verbose=TRUE)
+
+
+# Universities data set ---------------------------------------------------
+
+unis <- fread('./data/processed/IA_unis.csv', header = T,
+              sep = ',', verbose=TRUE)
+unis <- select(unis, -V1)
+
+#No need to merge with master; just for plotting
