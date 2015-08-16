@@ -124,8 +124,13 @@ ggplot(data=gr_st_weekday_count, aes(x=weekday, y=count_reps)) +
 
 # What happens in June? ---------------------------------------------------
 #Subset data for week 21 and week 22 and calculate reports variation per store
-test <- filter(gr_st_month_count, (month=="May")|(month=="June"))
-test <- select(test, -part_stores)
+gr_st_month_count.0506 <- filter(gr_st_month_count, (month=="May")|(month=="June"))
+gr_st_month_count.0506 <- select(gr_st_month_count.0506, -part_stores)
 #library(tidyr)
-test1 <- spread(test, month, count_reps)
-ggplot(data = test1, aes(x=STORE, y=June-May)) + geom_point()
+gr_st_month_count.0506 <- spread(gr_st_month_count.0506, month, count_reps)
+ggplot(data = gr_st_month_count.0506, aes(x=100*(June-May)/May)) + 
+  geom_histogram(fill=I("blue"), col=I("black"), alpha=0.5) +
+  theme(panel.background = element_rect(fill = 'white'),
+        plot.title = element_text(size = rel(1.5), colour = "blue")) + 
+  labs(x = "Percentage of change between May - June 14", 
+       title = "Percentage of change in transactions between May/June 14 per store")
