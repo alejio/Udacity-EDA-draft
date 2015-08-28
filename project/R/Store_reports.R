@@ -130,6 +130,7 @@ gr_st_month_count.0506 <- select(gr_st_month_count.0506, -part_stores)
 gr_st_month_count.0506 <- spread(gr_st_month_count.0506, month, count_reps)
 ggplot(data = gr_st_month_count.0506, aes(x=100*(June-May)/May)) + 
   geom_histogram(fill=I("blue"), col=I("black"), alpha=0.5) +
+  geom_vline(linetype="dashed", color="red") +
   theme(panel.background = element_rect(fill = 'white'),
         plot.title = element_text(size = rel(1.5), colour = "blue")) + 
   labs(x = "Percentage of change between May - June 14", 

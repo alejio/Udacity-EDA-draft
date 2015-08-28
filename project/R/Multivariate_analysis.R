@@ -22,7 +22,6 @@ category_corrs$`CATEGORY NAME` <- gr_cat$`CATEGORY NAME`
 sort(category_corrs["TEQUILA",], decreasing = T)[2:6]
 #As expected triple sec is there!
 
-
 #Plot correlations
 #Make x and y vectors
 cat_num.x <- c()
@@ -70,3 +69,18 @@ ggplot(data=category_corrs.tri ,aes(x=cat_num.x, y=corrs_cat.y)) +
   theme(axis.text=element_text(angle=90,size=8)) + scale_x_discrete(labels = abbreviate)
 
 scale_x_discrete(labels = function(x) str_wrap(x, width = 1))
+
+
+
+# correlations table ------------------------------------------------------
+library("xtable")
+xtable(corstarsl(gr_date_cat.spread[,c(3:70)]))
+
+corr.cat.ts <- rcorr(as.matrix(gr_date_cat.spread[,c(3:70)]))$r
+corr.cat.ts <- data.frame(corr.cat.ts)
+corr.cat.ts.dec <- apply(corr.cat.ts, 2, sort, decreasing=T)
+corr.cat.ts.inc <- apply(corr.cat.ts,2, sort)
+corr.cat.ts.min <- lapply(corr.cat.ts.inc, function(x) x[1:3])
+corr.cat.ts.max <- lapply(corr.cat.ts.dec, function(x) x[2:4])
+sapply(corr.cat.ts.min, function(x) names(x))
+sapply(corr.cat.ts.max, function(x) names(x))

@@ -79,7 +79,7 @@ nas <- na.omit(nas)
 ref.LLZ <- as.data.frame(select(zip_lat_lon_data, LONGITUDE,
                                 LATITUDE, ZIPCODE))
 library("geosphere")
-# Code to add zipcode in intermediate a3 data.frame that had NA's.
+# Code to add zipcode in intermediate data.frame that had NA's.
 # To be merged to main data1.
 for (i.na in seq(1,nrow(nas))) {
   b <- c()

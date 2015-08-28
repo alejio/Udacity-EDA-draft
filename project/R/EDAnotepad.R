@@ -50,4 +50,10 @@ ggplot(data=test, aes(x=TEQUILA, y=`TRIPLE SEC`)) + geom_point()
 library("GGally")
 ggpairs()
 
+CenterOfMap <- geocode("41.9137948,-93.3293731")
+Iowa <- get_map(c(lon=CenterOfMap$lon, lat=CenterOfMap$lat), zoom = 7, maptype = "hybrid", source = "google")
+IowaMap <- ggmap(Iowa)
+IowaMap 
 
+IowaMap + geom_point(aes(x = Longitude, y = Latitude, size=sqrt(estArea)),
+           data = data, alpha = .5, color="darkred")
