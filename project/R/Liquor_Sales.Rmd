@@ -1,0 +1,804 @@
+Exploring an enriched Iowa liquor sales dataset
+========================================================
+### *by Alex Spanos*
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+# Load all of the packages that you end up using
+# in your analysis in this code chunk.
+
+# Notice that the parameter "echo" was set to FALSE for this code chunk.
+# This prevents the code from displaying in the knitted HTML output.
+# You should set echo=FALSE for all code chunks in your file.
+
+library(Hmisc)
+library(ggplot2)
+library(data.table)
+library(tidyr)
+library(plyr)
+library(dplyr)
+library(RgoogleMaps)
+library(ggmap)
+library(geosphere)
+library(knitr)
+library(xtable)
+library(grid)
+opts_chunk$set(fig.width=9)
+```
+# Introduction
+Welcome to my Exploratory Data Analysis project for Udacity’s Data Analyst Nanodegree.
+As I wanted my work to be somewhat more original, I forewent the option of analysing one of the datasets in the Udacity list and went on to spend a few weeks trying to locate an appropriate dataset online; appropriate in this context meant firstly satisfying Udacity prerequisites and secondly being a real-world recent dataset, relatively “virgin” with respect to analysis attempts.
+
+There are a few excellent directories of free datasets out there, as well as free APIs. The one that intrigued me the most though was the [Iowa Liquor Sales dataset](https://data.iowa.gov/Economy/Iowa-Liquor-Sales/m3tr-qhgy). This dataset contains transactions between the relevant Iowa state authority and liquor stores across the state with a very high level of detail. I was surprised to find out that in Iowa alcohol sales are state-controlled; it seems that all orders have to go through the state! Anyway, the reasons why I found this dataset interesting were the following:
+
+* Large dataset (approx. 3m rows) but would fit in my laptop’s memory
+* Granular data at store level and reported daily (potential for time series analysis)
+* Contains geographical information (potential for interesting visualisations)
+* Potential for enrichment with auxiliary data sources
+
+The final point was quite important for me, because what mostly intrigues me in this field is discovering relationships and patterns which are not directly obvious (well I guess that applies for most of us here).
+
+So I then spent a bit of time trying to think of alternative data that I could merge into the master (raw) dataset. Given the richly detailed data at zipcode level, I managed to pull from the internet the following zipcode level information:
+
+* [population data](http://library.csun.edu/guides/GovPubs-Census/ZipCode)
+* [demographics data](http://zipatlas.com/us/ia/zip-code-comparison/population-density.7.htm)
+* [number of drinking establishments](http://factfinder.census.gov/faces/nav/jsf/pages/download_center.xhtml)
+* [weather data](https://www.ncdc.noaa.gov/cdo-web/datasets)
+* [location of Iowa universities](http://www.free-4u.com/Colleges/Iowa-Colleges.html)
+
+I did not know beforehand whether this would definitely provide interesting insights with regards to liquor consumption, but at least I could supplement my project with some descriptives about Iowa (which I knew next to nothing about!). Additionally, it was greatly enjoyable to exercise the skills I learnt in the Nanodegree’s Data Wrangling course. I got to use a few API’s, scraped some tables, used some regex and more in order to get all my auxiliary data sets in a neat csv format. Here I cheated a bit and used Python. After this data was in csv format though I performed all subsequent data merging operations in R.
+
+For the analysis purposes of this project I used RStudio on my Windows 7 laptop and also used git and GitHub for version control.
+
+So, on to the data analysis.
+
+```{r echo=FALSE, Load_the_Data}
+# Load the Data
+load("D:/Users/alexis.spanos.LON-24579/Downloads/Nanodegree/EDA/project/project.RData")
+```
+
+
+
+
+# Data
+## Loading
+```{r eval=FALSE, code = readLines('D:/Users/alexis.spanos.LON-24579/Downloads/Nanodegree/EDA/project/R/data_load_main.R')}
+```
+
+```{r eval=FALSE, code = readLines('D:/Users/alexis.spanos.LON-24579/Downloads/Nanodegree/EDA/project/R/data_load_aux.R')}
+```
+
+```{r eval=FALSE, code = readLines('D:/Users/alexis.spanos.LON-24579/Downloads/Nanodegree/EDA/project/R/data_merge.R')}
+```
+## Dataset features
+
+```{r echo=TRUE, Dataset_Features1}
+# Variables in master data set are listed below:
+colnames(data1)
+```
+Columns from the original liquor sales data are 1-18; others come from the
+auxilliary sources.
+
+```{r echo=TRUE, Dataset_Features2}
+# Example row in dataset
+knitr::kable(data1[1, seq(1,6, 1)])
+```
+
+The dataset is quite rich and holds many features of potential interest. For the purposes of this project I opted to focus on the drinking patterns of Iowans with respect to time of year and locality.
+
+Let's take a look at a few interesting variable summaries and number of unique observations.
+
+```{r echo=TRUE, Dataset_Features3}
+for (col in c(2, 14:44)){
+  print(paste0("Summary of ", colnames(data1)[col], " :"))
+  print(summary(data.frame(data1)[,col]))
+}
+
+
+for (col in c(1, 2, 3, 6, 8, 9, 12, 13, 14, 15, 18)){
+  print(paste("Count of unique observations of", colnames(data1)[col], "is:", length(unique(data.frame(data1)[,col]))))
+}
+```
+I would like to note that I am a bit disappointed by the completeness of the meteorological data that I ordered from the National Climatic Data Center; I also don't understand the units used for temperatures, as any transformations I tried did not return reasonable planet Earth values.. 
+
+# Analysis
+## Demographics
+
+In the following plots we will perform a high-level analysis of basic demographics.
+
+Firstly let's look at population per zipcode, so we need to group accordingly.
+
+```{r eval=FALSE, gr_zip_pop}
+gr_zip_pop <- ddply(data1[,c(1,24, seq(29,68,2), 72, 73), with=F], .(ZIPCODE), 
+                numcolwise(mean, na.rm=T))
+gr_zip_pop$ZIPCODE <- factor(gr_zip$ZIPCODE, ordered=F)
+
+#Prep for map plotting
+#Get map of Iowa using RgoogleMaps and ggmap
+CenterOfMap <- geocode("41.9137948,-93.3293731")
+Iowa <- get_map(c(lon=CenterOfMap$lon, lat=CenterOfMap$lat), zoom = 7,
+                   source = "stamen", maptype= "toner", color="bw")
+IowaMap <- ggmap(Iowa)
+```
+
+So now we've grouped per zipcode and pulled the population.
+
+I realised here that I had not actually merged the coordinates of "zipcode centre" to the master. I got around this by calculating the mean latitude and longitude of stores in the zipcode. Below lies a the map of Iowa where we overlay population bubbles per zipcode and also the location of universities; here the triangle size indicates number of students enrolled.
+
+
+```{r echo=TRUE, Demo_plots1}
+
+# Explore demographics ----------------------------------------------------
+suppressWarnings(IowaMap + 
+  geom_point(data=gr_zip_pop, aes(x=STORE_LON, y=STORE_LAT, size=POPULATION),
+             colour="red", alpha=0.5) +
+  geom_point(data = unis, aes(x=lon, y=lat, size=enrolled), colour="blue",
+             shape=17, alpha=0.5) + 
+  theme(legend.position="none", axis.title.x=element_blank(),
+        axis.title.y=element_blank(), axis.ticks=element_blank(),
+        axis.text.x=element_blank(), axis.text.y=element_blank(),
+        plot.title = element_text(size = rel(1), colour = "blue")) +
+  labs(title="Map of Iowa with population and university overlays"))
+```
+
+We can see that Davenport and Iowa city are big University cities. Regarding population, Des Moines, Waterloo, Cedar Rapids, Dubuque and Sioux City are all cities in which certain areas (zipcodes) are highly populated. It will be more useful of course to look at overall city population and that is what we are going to do now. 
+
+```{r eval=FALSE, gr_city_pop}
+
+gr_city_pop <- ddply(data1, .(ZIPCODE, CITY), summarise, 
+                     POPULATION = mean(POPULATION, na.rm=T), 
+                     STORE_LAT = mean(STORE_LAT, na.rm = T),
+                     STORE_LON = mean(STORE_LON, na.rm = T))
+gr_city_pop <- ddply(gr_city_pop, .(CITY), summarise, 
+                     TOT_POP = sum(POPULATION, na.rm = T),
+                     LAT = mean(STORE_LAT, na.rm = T), 
+                     LON = mean(STORE_LON, na.rm =T))
+```
+
+
+```{r echo=TRUE, Demo_plots2}
+IowaMap + 
+  geom_point(data=gr_city_pop, aes(x=LON, y=LAT, size=TOT_POP),
+             colour="purple", alpha=1) +
+  theme(legend.position="none", axis.title.x=element_blank(),
+        axis.title.y=element_blank(), axis.ticks=element_blank(),
+        axis.text.x=element_blank(), axis.text.y=element_blank(),
+        plot.title = element_text(size = rel(1), colour = "blue")) +
+  labs(title="Map of Iowa with city population overlay")
+```
+
+And county populations below..
+
+```{r eval=FALSE, gr_county_pop}
+
+gr_county_pop <- ddply(data1, .(ZIPCODE, COUNTY), summarise, 
+                     POPULATION = mean(POPULATION, na.rm=T), 
+                     STORE_LAT = mean(STORE_LAT, na.rm = T),
+                     STORE_LON = mean(STORE_LON, na.rm = T))
+gr_county_pop <- ddply(gr_county_pop, .(COUNTY), summarise, 
+                     TOT_POP = sum(POPULATION, na.rm = T),
+                     LAT = mean(STORE_LAT, na.rm = T), 
+                     LON = mean(STORE_LON, na.rm =T))
+```
+
+
+```{r echo=TRUE, Demo_plots3}
+IowaMap + 
+  geom_point(data=gr_county_pop, aes(x=LON, y=LAT, size=TOT_POP),
+             colour="blue", alpha=1) +
+  theme(legend.position="none", axis.title.x=element_blank(),
+        axis.title.y=element_blank(), axis.ticks=element_blank(),
+        axis.text.x=element_blank(), axis.text.y=element_blank(),
+        plot.title = element_text(size = rel(1), colour = "blue")) +
+  labs(title="Map of Iowa with county population overlay")
+```
+
+I think it's clear that the centre of Iowa is Des Moines. There are some highly populated areas along the county's contour, such as Sioux City, Omaha and Dubuque.
+
+Before moving on to the liquor sales analysis I would like to take a look at national group populations.
+
+For the following plots I used *multiplot*; a very useful function from [cookbook-r](http://www.cookbook-r.com/Graphs/Multiple_graphs_on_one_page_(ggplot2)/).
+
+```{r eval=FALSE, multiplot}
+# Multiple plot function
+#
+# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+# - cols:   Number of columns in layout
+# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
+#
+# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+# then plot 1 will go in the upper left, 2 will go in the upper right, and
+# 3 will go all the way across the bottom.
+#
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+  
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+  
+  numPlots = length(plots)
+  
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                     ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+  
+  if (numPlots==1) {
+    print(plots[[1]])
+    
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+    
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+      
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+
+```
+
+In the composite plot below I am producing something like a heat map for population percentages per zipcode for a selection of nationalities; "cold" is blue and "hot" is yellow/brown (I found it hard to overlay a global legend.)
+
+```{r echo=TRUE, Demo_plots4}
+
+#Produce maps with overlays for all nationalities
+
+suppressWarnings(multiplot(plot_map_nat_over(3), plot_map_nat_over(6), plot_map_nat_over(7), 
+          plot_map_nat_over(8), plot_map_nat_over(9), plot_map_nat_over(10),
+          plot_map_nat_over(11), plot_map_nat_over(12), plot_map_nat_over(13),
+          plot_map_nat_over(14), plot_map_nat_over(15), plot_map_nat_over(16),
+          plot_map_nat_over(17), plot_map_nat_over(18), plot_map_nat_over(19),
+          plot_map_nat_over(20), plot_map_nat_over(21),
+          cols=5))
+
+```
+
+And finally 
+
+```{r eval=FALSE, gr_zip_pop_totalest}
+#Add establishments variable to zipcode grouped data
+test <- unique(cbind(data1$ZIPCODE, data1$TOTAL_EST))
+test <- data.table(test)
+setnames(test, c(1,2), c("ZIPCODE", "TOTAL_EST"))
+test$ZIPCODE <- factor(test$ZIPCODE)
+gr_zip_pop <- left_join(gr_zip_pop, test)
+rm(test)
+```
+```{r echo=TRUE, Demo_plots5}
+#Plot
+suppressWarnings(IowaMap + 
+  geom_point(data=gr_zip_pop, aes(x=STORE_LON, y=STORE_LAT, size=TOTAL_EST),
+             colour="green", alpha=0.5) +
+  theme(legend.position="none", axis.title.x=element_blank(),
+        axis.title.y=element_blank(), axis.ticks=element_blank(),
+        axis.text.x=element_blank(), axis.text.y=element_blank(),
+        plot.title = element_text(size = rel(1), colour = "blue")) +
+  labs(title="Map of Iowa with establishment overlays"))
+
+```
+
+OK now let's move on to liquor sales.
+
+## Liquor sales
+### Auditing data
+Let's audit the liquor sales data a little bit first just to make sure it is trustworthy.
+
+Firstly some data prep:
+
+```{r eval=FALSE, audit1}
+#Make DF summarising reports for each store each month
+gr_st_month_count <- ddply(data1, .(months(DATE), STORE), summarise, 
+              count_reps=length(STORE))
+setnames(gr_st_month_count,1, "month")
+gr_st_month_count$month <- factor(gr_st_month_count$month,
+                                  levels=month.name)
+
+# Make separate DF counting number of participating stores per month
+gr_st_month.part_stores <- data.frame("month"=factor(rownames(
+  table(gr_st_month_count$month)),levels=month.name),
+  "part_stores"=as.numeric(table(gr_st_month_count$month)))
+
+#Combine data sets for ggplot use
+gr_st_month_count <- left_join(gr_st_month_count, gr_st_month.part_stores)
+rm(gr_st_month.part_stores)
+
+```
+
+And on to a boxplot which illustrates the monthly distribution of the number of transactions recorded in the database; I also incorporated information for the number of stores appearing in the data on a monthly basis as a colour variable.
+
+```{r echo=TRUE, auditplot1}
+#Number of reports per month and num. of participating stores overlay
+ggplot(data=gr_st_month_count, aes(x=month, y=count_reps)) + 
+  stat_boxplot(geom='errorbar') + geom_jitter(alpha=0.2) + 
+  geom_boxplot(aes(fill=part_stores), outlier.size=0) +
+  coord_cartesian(ylim = c(0, 1000)) +
+  theme(panel.background = element_rect(fill = 'white'),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        plot.title = element_text(size = rel(1), colour = "blue")) + 
+  labs(x="Month", y = "Transactions", 
+title = "Monthly Transactions between Iowa State and Liquor Stores")
+```
+
+We see a drastic reduction in the number of reports; a step change occurring in June. The subsequent plots presenting the same data grouped by week.
+
+```{r eval=FALSE, gr_st_week}
+# Get weekly reports as per month methodology
+
+gr_st_week_count <- ddply(data1, .(format(DATE, "%U"), STORE), summarise, 
+                             count_reps=length(STORE))
+setnames(gr_st_week_count,1, "week")
+gr_st_week_count$week <- as.numeric(gr_st_week_count$week)
+gr_st_week.part_stores <- data.frame("week"=rownames(table(gr_st_week_count$week)),
+  "part_stores"=as.numeric(table(gr_st_week_count$week)))
+gr_st_week.part_stores$week <- as.numeric(as.character(gr_st_week.part_stores$week))
+gr_st_week_count <- left_join(gr_st_week_count, gr_st_week.part_stores)
+#changed my mind. will make week factor
+gr_st_week_count$week <- factor(gr_st_week_count$week)
+rm(gr_st_week.part_stores)
+```
+
+
+```{r echo=TRUE, auditplot2}
+#Plot: same as plot 1 but using boxplot colour as part. stores variable
+ggplot(data=gr_st_week_count, aes(x=week, y=count_reps)) + 
+  stat_boxplot(geom='errorbar') + geom_jitter(alpha=0.2) + 
+  geom_boxplot(aes(fill=part_stores), outlier.size=0) +
+  coord_cartesian(ylim = c(0, 250)) +
+  theme(panel.background = element_rect(fill = 'white'),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        plot.title = element_text(size = rel(1), colour = "blue")) + 
+  labs(x="Week", y = "Transactions", 
+       title = "Weekly Transactions between Iowa State and Liquor Stores")
+```
+
+Here we see that the step change occurs on the 1st week of June. Which is suspicious. Let's zoom in on daily data for that period.
+
+
+```{r eval=FALSE, gr_st_day_count}
+gr_st_day_count <- ddply(filter(data1, (DATE <= "2014-06-08") & 
+                                  (DATE >="2014-05-25")), .(DATE, STORE),
+                         summarise, count_reps=length(STORE))
+setnames(gr_st_day_count,1, "day")
+gr_st_day.part_stores <- data.frame("day"=rownames(table(gr_st_day_count$day)),
+                                     "part_stores"=as.numeric(table(gr_st_day_count$day)))
+gr_st_day.part_stores$day <- as.Date(as.character(gr_st_day.part_stores$day))
+gr_st_day_count <- left_join(gr_st_day_count, gr_st_day.part_stores)
+rm(gr_st_day.part_stores)
+```
+
+```{r echo=TRUE, auditplot3}
+ggplot(data=gr_st_day_count, aes(x=as.character(day), y=count_reps)) + 
+  stat_boxplot(geom='errorbar') + geom_jitter(alpha=0.2) + 
+  geom_boxplot(aes(fill=part_stores), outlier.size=0) +
+  coord_cartesian(ylim = c(0, 250)) +
+  theme(panel.background = element_rect(fill = 'white'),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        plot.title = element_text(size = rel(1), colour = "blue")) + 
+  labs(x="Day", y = "Transactions", 
+       title = "Daily Transactions between Iowa State and Liquor Stores")
+```
+
+So it's actually the first day of June that the number of reports reduces dramatically. I performed a quick Google search on whether anything changed drastically in terms of Iowa liquor sales legislation, or if anything major happened but to no avail. Furthermore, I believe this is not a seasonal effect (end of Univ. semesters, basketball/football end of season) because the number of reports:
+
+* Falls too abruptly
+* Does not return to previous levels later in the year
+
+Therefore I feel that this pattern has something to do with data collection/recording.
+
+One thing I observed was that the fiscal year for the relevant Iowa state division runs from July to June. So this dataset partially contains data from two fiscal years (January to June: 2013, July to December: 2014). Could this mean something? 
+
+Anyway, I decided not to pursue this investigation any further; it is clear that the dataset has limitations and it is probably best to analyse these two periods independently (at least for time series analysis). 
+
+Before I move on to the main body of the analysis, let's look at the distribution of transactions per weekday.
+
+```{r eval=FALSE, gr_st_weekday_count}
+#Weekday
+gr_st_weekday_count <- ddply(data1, .(weekdays(DATE), STORE), summarise, 
+                             count_reps=length(STORE))
+setnames(gr_st_weekday_count,1, "weekday")
+day.name <- c("Monday", "Tuesday", "Wednesday", "Thursday", 
+              "Friday", "Saturday", "Sunday")
+gr_st_weekday_count$weekday <- factor(gr_st_weekday_count$weekday, levels=day.name)
+gr_st_weekday.part_stores <- data.frame("weekday"=rownames(table(gr_st_weekday_count$weekday)),
+                                    "part_stores"=as.numeric(table(gr_st_weekday_count$weekday)))
+gr_st_weekday.part_stores$weekday <- factor(gr_st_weekday.part_stores$weekday, levels=day.name)
+gr_st_weekday_count <- left_join(gr_st_weekday_count, gr_st_weekday.part_stores)
+rm(gr_st_weekday.part_stores)
+```
+
+
+```{r echo=TRUE, auditplot4}
+#Plot data
+ggplot(data=gr_st_weekday_count, aes(x=weekday, y=count_reps)) + 
+  stat_boxplot(geom='errorbar') + geom_jitter(alpha=0.2) + 
+  geom_boxplot(aes(fill=part_stores), outlier.size=0) +
+  coord_cartesian(ylim = c(0, 4500)) +
+  theme(panel.background = element_rect(fill = 'white'),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        plot.title = element_text(size = rel(1), colour = "blue")) + 
+  labs(x="Weekday", y = "Transactions", 
+       title = 
+         "Number of orders submitted per weekday")
+```
+
+Here we see that most orders are placed on Wednesdays and Thursdays.
+
+### Analysis of liquor sales data
+
+We saw that time series analyses on the full data-set are probably not suitable.
+
+Let's look at various dataset properties.
+
+Plotting the distribution of bottles sold per transaction.
+
+```{r echo=TRUE, Liqplots1}
+
+ggplot(data=data1, aes(x=`BOTTLE QTY`)) +
+  geom_histogram(aes(y =..density..),
+                 fill=I("blue"), col=I("black"), alpha=0.5, origin = -0.5) +
+  labs(title="Histogram for Bottle Quantities", x="Bottles", y="Count") +
+  theme(panel.background = element_rect(fill = 'white'),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.ticks=element_blank(),
+        plot.title = element_text(size = rel(1), colour = "blue"))
+```
+
+Not easy to see shape of distribution. Looking at log-transform.
+
+```{r echo=TRUE, Liqplots2}
+bks <- seq(min(data1$`BOTTLE QTY`, na.rm=T), max(data1$`BOTTLE QTY`, na.rm=T))
+ggplot(data=data1, aes(x=`BOTTLE QTY`)) +
+  geom_histogram(aes(y =..density..),
+                 fill=I("blue"), col=I("black"), alpha=0.5, origin = -0.5) +
+  labs(title="Histogram for Log Bottle Quantities", x="Bottles", y="Count") +
+  scale_x_log10(breaks=bks, labels=NULL) +
+  theme(panel.background = element_rect(fill = 'white'),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.ticks=element_blank(),
+        plot.title = element_text(size = rel(1), colour = "blue"))
+```
+
+The log transform shows that the amount of bottles sold per transaction is to a large extent "quantised" (or non-uniform?). Let's focus on the denser area of the distribution with un-transformed axes. 
+
+```{r echo=TRUE, Liqplots3}
+
+ggplot(data=data1, aes(x=`BOTTLE QTY`)) +
+  geom_histogram(aes(y =..density..),
+                 fill=I("blue"), col=I("black"), alpha=0.5, origin = -0.5) +
+  labs(title="Histogram for Bottle Quantities", x="Bottles", y="Count") +
+  theme(panel.background = element_rect(fill = 'white'),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.ticks=element_blank(),
+        plot.title = element_text(size = rel(1), colour = "blue")) + 
+  scale_x_continuous(limits=c(0,50), breaks=seq(0,50,2))
+```
+
+So here we see that the mode of the distribution is 12; most orders are submitted for a dozen bottles of some liquor. We also see that multiples of 12 are also high occurring, as well as 6 (half-a-dozen).
+
+Now I would like to look at total bottle sales as time-series, so let's create appropriate variables for the period of January to May.
+
+```{r eval=FALSE, gr_date.Jan_May}
+gr_date.Jan_May <- ddply(filter(data1, (DATE < "2014-06-01")),
+                     .(DATE), summarise, BOTTLES = sum(`BOTTLE QTY`, na.rm=T), 
+                     BOTTLES_NORM = sum(`BOTTLE QTY`/POPULATION, na.rm=T))
+```
+
+The above data frame contains three variables: date, total bottles sold and *normalised bottles sold*. The latter variable is an attempt to adjust for the population bias. This effect arises because we aggregate data from variably populated areas in Iowa and can potentially obscure meaningful relationships in the analysis of the data. The following code rearranges the data frame a bit to help out ggplot2.
+
+```{r eval=FALSE, gr_date.Jan_May2}
+
+test <- gr_date.Jan_May
+maxbot <- max(gr_date.Jan_May$BOTTLES, na.rm=T)
+maxbotnorm <- max(gr_date.Jan_May$BOTTLES_NORM, na.rm=T)
+test<- arrange(gather(test, "type", "bottles", 2:3), DATE)
+test <- mutate(test, maxbottles =ifelse(type=="BOTTLES", maxbot, maxbotnorm))
+gr_date.Jan_May <- test
+rm(test)
+```
+
+And the plot follows..
+
+```{r echo=TRUE, Liqplots4, fig.width=12, fig.height=9}
+ggplot(data=gr_date.Jan_May,aes(x=DATE, y=bottles/maxbottles, colour=type)) + 
+  geom_point()+ geom_line() +
+                            geom_ribbon(aes(ymin=0, ymax=bottles/maxbottles, fill=type)) +
+  scale_fill_brewer(palette="Set3")+
+  labs(x="Date", y = "Bottles")+
+  theme(panel.background = element_rect(fill = 'white'),
+        plot.title = element_text(size = rel(1), colour = "blue")) 
+
+```
+
+When we look at the raw time series of the quantity of bottles ordered, we see some type of seasonality but it is not easy to interpret. However, once we attenuate the population effect, we see a very stable weekly pattern spiking on a single weekday. Let's look at this data in more detail.
+
+```{r echo=TRUE, Liqplots5}
+p1 <- ggplot(data=filter(gr_date.Jan_May, type=="BOTTLES_NORM"),
+       aes(x=factor(weekdays(DATE), levels=day.names),
+                             y=bottles)) +geom_boxplot()+
+  labs(x="Weekday", y="Bottles (pop bias removed)")
+
+p2 <- ggplot(data=filter(gr_date.Jan_May, type=="BOTTLES_NORM"), 
+       aes(x=format(DATE, "%U"),
+                             y=bottles)) +geom_boxplot()+
+  labs(x="Week", y="Bottles (pop bias removed)")
+  
+p3 <- ggplot(data=filter(gr_date.Jan_May, type=="BOTTLES_NORM"),
+       aes(x=factor(months(DATE), levels=month.name),
+                             y=bottles)) +geom_boxplot()+
+  labs(x="Month", y="Bottles (pop bias removed)")
+multiplot(p1, p2, p3, cols=2)
+rm(p1,p2,p3)
+```
+
+So in the weekday plot we see more clearly this stable pattern in quantities of bottles ordered per citizen. Tuesday is the "spike" day, Monday and Wednesday are pretty much the same; after Wednesday the quantities decline. In my mind this pattern makes sense: Monday is the first day of the week and the stores calculate their weekly requirements by the end of the day. They then submit the order either at end of business or early Tuesday; this allows time for the bottles to be delivered prior to the weekend. They shouldn't need to order too many bottles after the early week's budgeting.
+
+It is a bit counter-intuitive though that in a previous plot we saw that the number of orders per weekday (as opposed to quantity of bottles ordered per weekday) was greatest on Wednesday's and Thursday's. Maybe if I had corrected for the population bias, a similar trend would have been revealed...
+
+One last note on the previous weekday analysis. Let's plot the raw and population-adjusted quantities against each other and see what we get. I hope it will show a bit more on how the normalisation helped the analysis. 
+
+
+```{r echo=TRUE, Liqplots6}
+ggplot(data=gr_date.Jan_May,aes(x=bottles[type=="BOTTLES"]/maxbottles[type=="BOTTLES"], 
+                                y=bottles[type=="BOTTLES_NORM"]/maxbottles[type=="BOTTLES_NORM"],
+                                shape=weekdays(DATE[type=="BOTTLES"]),
+                                colour=weekdays(DATE[type=="BOTTLES"]))) +
+  geom_point(size=3) + labs(x="raw quantities", y="population adjusted quantities")
+```
+
+I like this plot because it looks like a machine learning exercise.. We see here that each day forms an (almost) discrete cluster, with Tuesdays and Fridays having maximum separation from the main body of observations; however Fridays would belong to a high R-squared fitter regression line of all observations excluding Tuesdays. So I think the real outlier here is Tuesdays, in the sense that the normalisation added high information value for that weekday.
+
+### Bottle price vs total sales
+
+In this small section I will group data per item (liquor) and plot the relationship between number of bottles ordered and bottle price.
+
+Firstly let's create our data frame.
+```{r eval=F, gr_item}
+# group by item
+gr_item <- ddply(data1, .(DESCRIPTION), summarise,
+                 bottles=sum(`BOTTLE QTY`, na.rm=T), price=mean(`BTL PRICE`))
+```
+
+Here is the raw plot...
+
+```{r echo=TRUE, Liqplots7}
+#plot raw
+ggplot(data=gr_item, aes(x=bottles, y=price)) + geom_point()
+```
+
+We don't see too much. In these cases it is often helpful to log-transform axes.
+
+```{r echo=TRUE, Liqplots8}
+#plot log-transformed
+#good relationship
+ggplot(data=gr_item, aes(x=bottles, y=price)) + geom_point() +
+  scale_y_log10() + scale_x_log10() + geom_smooth(fill="red")
+```
+
+Theer is a clear relationship between bottle price and quantities ordered. Specifically there is a negative trend which is linear for the most of the observations; however we can see higher price-demand variance for the more expensive liquors.
+
+### Relationships between order quantities of different liquors
+
+In this small section I would like to look at order quantities as time series (note: using full dataset for this part). Let's calculate our dataframe first, where we group by month and liquor category, calculate total bottles ordered per category/month and derive from this a relevant normalised variable representing percentages over total bottles ordered.
+
+```{r eval=FALSE, gr_date_cat2}
+gr_date_cat2 <- ddply(data1, .(DATE, `CATEGORY NAME`), summarise, 
+                      BOTTLES = sum(`BOTTLE QTY`, na.rm=T))
+gr_date_cat2.month <- ddply(gr_date_cat2, .(factor(months(DATE), levels=month.name),
+                                    `CATEGORY NAME`), summarise,
+                            BOTTLES = sum(`BOTTLES`, na.rm=T))
+setnames(gr_date_cat2.month, 1, "Month")
+gr_date_cat3 <- ddply(gr_date_cat2.month, .(Month), summarise,
+                      TOT_BOTT = sum(BOTTLES, na.rm=T))
+
+gr_date_cat2.month <- left_join(gr_date_cat2.month, gr_date_cat3)
+gr_date_cat2.month$BCAT_NORM <- gr_date_cat2.month$BOTTLES/gr_date_cat2.month$TOT_BOTT
+setnames(gr_date_cat2.month, 2, "CATEGORY")
+```
+
+In the subsequent plots I show time series of normalised bottle quantities of orders for each liquor category per month; I have added a colour overlay of season (winter, spring,...) in order to discern seasonal patterns more easily.
+
+```{r echo=TRUE, Liqplots9, fig.width=12, fig.height=9}
+ggplot(data=gr_date_cat2.month, aes(x=Month, y=BCAT_NORM, group=1)) +
+  facet_wrap(~ CATEGORY, scales = "free_y") +
+  labs(x="Month", y = "Normalised bottle sales", 
+       title = "Liquor categories bottle sales with season overlay") + 
+  theme(panel.background = element_rect(fill = 'white'),
+        strip.text = element_text(size=7, colour="blue"),
+        strip.background = element_rect(fill="white"),
+        axis.text.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks=element_blank()) +
+  geom_rect(data=NULL,aes(xmin="January",xmax="March",ymin=-Inf,ymax=Inf),
+            fill="royalblue1") +
+  geom_rect(data=NULL,aes(xmin="March",xmax="June",ymin=-Inf,ymax=Inf),
+            fill="greenyellow") +
+  geom_rect(data=NULL,aes(xmin="June",xmax="September",ymin=-Inf,ymax=Inf),
+            fill="tomato") +
+  geom_rect(data=NULL,aes(xmin="September",xmax="December",ymin=-Inf,ymax=Inf),
+            fill="violet") +
+  geom_rect(data=NULL,aes(xmin="December",xmax=Inf,ymin=-Inf,ymax=Inf),
+            fill="royalblue1") +
+  geom_line()
+```
+
+A few (qualitative) observations can be made. We can identify that certain liquor types have a demand curve that only peaks in December, for example liqueurs with various flavours like creme de menthe/cacao/etc., brandies and some types of schnapps (cinammon, butterscotch). Given that these types of liquors have a heavier taste and are generally considered "warming", their demand curve makes sense - we identified the "winter drinks".
+
+Another observation that makes sense, is the very similar curve shape of tequila and triple sec; two of the margarita ingredients (on the side I plotted respective bottle quantities to see if the 2:1 margarita ratio is reflected in bottle quantities - it didn't). This demand pattern is there for a few of the liquors (flavoured rums, imported vodka, where bottle quantities are clearly correlated with expected average temperatures (demand lowest in winter, climbs gradually in spring, peaks between mid-spring/mid-summer, gradually descends in autumn). As opposed to the previous category, these are the "summer drinks".
+
+There is a lot of work that can still be performed here with good potential for hidden insights. Just by looking at the time series we can identify interesting patterns which don't make immediate sense. For example:
+
+* Spiced rum peaks every three months at the beginning of each season
+* Whiskies and vodkas in general have highly heterogeneous demand patterns within their broader category
+* Barbados rum quantities peak only on one date - supply issue?
+
+As a final insight in this section, let's look at time series correlations between categories.
+
+In order to pretty-print the correlation table, I will use the great *corstarsl* function taken from [here](http://myowelt.blogspot.co.uk/2008/04/beautiful-correlation-tables-in-r.html).
+
+```{r eval=FALSE, corstarsl}
+#Took this function that makes nice correlation tables from here
+#http://myowelt.blogspot.co.uk/2008/04/beautiful-correlation-tables-in-r.html
+corstarsl <- function(x){ 
+  require(Hmisc) 
+  x <- as.matrix(x) 
+  R <- rcorr(x)$r 
+  p <- rcorr(x)$P 
+  
+  ## define notions for significance levels; spacing is important.
+  mystars <- ifelse(p < .001, "***", ifelse(p < .01, "** ", ifelse(p < .05, "* ", " ")))
+  
+  ## trunctuate the matrix that holds the correlations to two decimal
+  R <- format(round(cbind(rep(-1.11, ncol(x)), R), 2))[,-1] 
+  
+  ## build a new matrix that includes the correlations with their apropriate stars 
+  Rnew <- matrix(paste(R, mystars, sep=""), ncol=ncol(x)) 
+  diag(Rnew) <- paste(diag(R), " ", sep="") 
+  rownames(Rnew) <- colnames(x) 
+  colnames(Rnew) <- paste(colnames(x), "", sep="") 
+  
+  ## remove upper triangle
+  Rnew <- as.matrix(Rnew)
+  Rnew[upper.tri(Rnew, diag = TRUE)] <- ""
+  Rnew <- as.data.frame(Rnew) 
+  
+  ## remove last column and return the matrix (which is now a data frame)
+  Rnew <- cbind(Rnew[1:length(Rnew)-1])
+  return(Rnew) 
+}
+```
+
+And the table:
+
+```{r results="asis", corr_table}
+print.xtable(xtable(corstarsl(gr_date_cat.spread[,c(3:70)])), comment=F, type="html", size=1)
+```
+
+```{r eval=FALSE, corr_cat_ts}
+corr.cat.ts <- rcorr(as.matrix(gr_date_cat.spread[,c(3:70)]))$r
+corr.cat.ts <- data.frame(corr.cat.ts)
+corr.cat.ts.dec <- apply(corr.cat.ts, 2, sort, decreasing=T)
+corr.cat.ts.inc <- apply(corr.cat.ts,2, sort)
+corr.cat.ts.min <- lapply(corr.cat.ts.inc, function(x) x[1:3])
+corr.cat.ts.max <- lapply(corr.cat.ts.dec, function(x) x[2:4])
+```
+
+In the following lists we display the highest correlations (positive and negative) per category.
+
+```{r echo=TRUE, corrs_max_min}
+#Maximum positive correlations per category
+sapply(corr.cat.ts.max, function(x) names(x))
+#Maximum negative correlations per categor
+sapply(corr.cat.ts.min, function(x) names(x))
+```
+
+
+------
+
+# Final Plots and Summary
+
+### Plot One
+```{r echo=FALSE, Plot_One, fig.width=12, fig.height=9}
+ggplot(data=gr_date.Jan_May,aes(x=DATE, y=bottles/maxbottles, colour=type)) + 
+  geom_point()+ geom_line() +
+                            geom_ribbon(aes(ymin=0, ymax=bottles/maxbottles, fill=type)) +
+  scale_fill_brewer(palette="Set3")+
+  labs(x="Date", y = "Bottles", title = "Time-series of bottle quantities ordered")+
+  theme(panel.background = element_rect(fill = 'white'),
+        plot.title = element_text(size = rel(1), colour = "blue"))
+```
+
+### Description One
+The plot above shows an overlay of two time-series demonstrating measures of bottle quantities ordered. Specifically:
+
+* The raw time-series of bottle quantities ordered
+* The adjusted time-series, where quantities are divided by zipcode population (per order) 
+
+It is clear that when the quantities were population-adjusted, a clear periodicity is observable.
+
+(In order to overlay both time-series on the same plot, they were transformed into percentages by dividing over their sum.)
+
+### Plot Two
+```{r echo=FALSE, Plot_Two, fig.width=12, fig.height=9}
+
+#Number of reports per month and num. of participating stores overlay
+ggplot(data=gr_st_month_count, aes(x=month, y=count_reps)) + 
+  stat_boxplot(geom='errorbar') + geom_jitter(alpha=0.2) + 
+  geom_boxplot(aes(fill=part_stores), outlier.size=0) +
+  coord_cartesian(ylim = c(0, 1000)) +
+  theme(panel.background = element_rect(fill = 'white'),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        plot.title = element_text(size = rel(1), colour = "blue")) + 
+  labs(x="Month", y = "Number of orders", 
+title = "Monthly Liquor Store orders")
+
+```
+
+### Description Two
+
+This time-series of boxplots shows the monthly number of orders submitted by liquor stores; the colour of the boxplots shows the number of participating stores on that particular month.
+
+It is evident that some data-recording issue takes place in June (perhaps relevant to fiscal years?), as orders reduce dramatically and do not recover later in the year.
+
+This plot shows that it is best to separate the dataset into 2 periods (Jan-May, June-Dec) for a more robust time-series analysis.
+
+### Plot Three
+
+```{r echo=FALSE, Plot_Three, fig.width=12, fig.height=9}
+
+ggplot(data=gr_date_cat2.month, aes(x=Month, y=BCAT_NORM, group=1)) +
+  facet_wrap(~ CATEGORY, scales = "free_y") +
+  labs(x="Month", y = "Normalised bottle sales", 
+       title = "Liquor categories bottle sales with season overlay") + 
+  theme(panel.background = element_rect(fill = 'white'),
+        strip.text = element_text(size=7),
+        strip.background = element_rect(fill="white"),
+        axis.text.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks=element_blank(),
+        plot.title = element_text(size = rel(1), colour = "blue")) +
+  geom_rect(data=NULL,aes(xmin="January",xmax="March",ymin=-Inf,ymax=Inf),
+            fill="royalblue1") +
+  geom_rect(data=NULL,aes(xmin="March",xmax="June",ymin=-Inf,ymax=Inf),
+            fill="greenyellow") +
+  geom_rect(data=NULL,aes(xmin="June",xmax="September",ymin=-Inf,ymax=Inf),
+            fill="tomato") +
+  geom_rect(data=NULL,aes(xmin="September",xmax="December",ymin=-Inf,ymax=Inf),
+            fill="violet") +
+  geom_rect(data=NULL,aes(xmin="December",xmax=Inf,ymin=-Inf,ymax=Inf),
+            fill="royalblue1") +
+  geom_line()
+
+```
+
+### Description Three
+
+This composite plot shows time series of bottle quantities ordered for all liquor categories in the data; also here the seasons are overlaid in order to aid the visual interpretation of the individual plots. There are many investigations one can partake in with these data, but at an elementary level the liquors can be categorised to "winter" and "summer" drinks.
+
+------
+
+# Reflection
+
+Due to time limitations this project as it was submitted is not thorough, in the sense that most insights are derived from superficial analyses. Most of my observations are intuitive, and I have not succeeded in revealing any hidden patterns within the time-frame (perhaps with the exception of the clear periodicity of the total population-adjusted bottle quantity orders) - I fell into many dead-end analysis attempts.
+
+In general, I think that identifying the auxilliary datasets and merging them to the master took a longer time than I expected and this limited the amount of time I could dedicate to the actual analysis. However, I think that combining the Iowa Liquor Sales data with the auxilliaries has provided a large, granular and rich data set that enables anyone interested to play with the data and see what they find - I am sharing it on [Dropbox](https://www.dropbox.com/s/osdbg8o1j28cp1l/EDA_Udacity_data.zip?dl=0).
+
+This project gave me the opportunity to hone my skills in R data wrangling (packages data.table, dplyr are awesome) and data visualisation (ggplot2); not a lot was done in terms of statistical modelling though. I was also happy I got to use the stuff I learnt in a previous Udacity course in scraping tables and request data using API's. Additionally, I started to use git and GitHub - the integration in RStudio is great.
+
+A little disclaimer about the *project.Rdata* file I've added to the repo; I've dropped quite a few columns in order to reduce file-size and conform with GitHub rules - it allows faster knitting of the .rmd that would otherwise take ages. (For the full enriched dataset please see Dropbox [link](https://www.dropbox.com/s/osdbg8o1j28cp1l/EDA_Udacity_data.zip?dl=0)).
