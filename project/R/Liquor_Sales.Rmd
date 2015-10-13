@@ -1124,7 +1124,9 @@ Spiced rum, Puerto Rico rum and straight bourbon whiskies are the highest positi
 
 ### Plot One
 ```{r echo=FALSE, Plot_One, fig.width=12, fig.height=9, cache=TRUE, cache.path='cache/', fig.path='figure/'}
-ggplot(data=gr_date.Jan_May,aes(x=DATE, y=bottles/maxbottles, colour=type)) + 
+gr_date.Jan_May_v2 <- gr_date.Jan_May
+gr_date.Jan_May_v2$type <- sapply(gr_date.Jan_May_v2$type, function(x) ifelse(x=="BOTTLES", "1. raw quantities", "2. population-adjusted quantities"))
+ggplot(data=gr_date.Jan_May_v2,aes(x=DATE, y=bottles/maxbottles, colour=type)) + 
   geom_point()+ geom_line() +
   geom_ribbon(aes(ymin=0, ymax=bottles/maxbottles, fill=type)) +
   scale_fill_brewer(palette="Set3")+
