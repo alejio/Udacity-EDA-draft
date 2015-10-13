@@ -21,7 +21,10 @@ library(geosphere)
 library(knitr)
 library(xtable)
 library(grid)
-opts_chunk$set(fig.width=9)
+library(GGally)
+library(lubridate)
+library(scales)
+opts_chunk$set(fig.width=9, message = FALSE, warnings = FALSE)
 ```
 # Introduction
 Welcome to my Exploratory Data Analysis project for Udacity’s Data Analyst Nanodegree.
@@ -70,6 +73,8 @@ load("D:/Users/alexis.spanos.LON-24579/Downloads/Nanodegree/EDA/project/project.
 ```
 ## Dataset features
 
+### Initial univariate exploration
+
 ```{r echo=TRUE, Dataset_Features1}
 # Variables in master data set are listed below:
 colnames(data1)
@@ -79,121 +84,91 @@ auxilliary sources.
 
 ```{r echo=TRUE, Dataset_Features2}
 # Example row in dataset
-knitr::kable(data1[1, seq(1,6, 1)])
+data1[1,]
 ```
 
 The dataset is quite rich and holds many features of potential interest. For the purposes of this project I opted to focus on the drinking patterns of Iowans with respect to time of year and locality.
 
-Let's take a look at a few interesting variable summaries and number of unique observations.
+As an initial attempt at producing descriptives for the dataset, I am defining below three functions that generate histograms and calculate means and number of observations. I have split the variables into three sets; the original liquor sales variables, the added meteorological variables and the added demographic variables. For the latter two categories, the statistics were obtained on data grouped by zipcode in order to be more correct.
 
-```{r echo=TRUE, Dataset_Features3}
-for (col in c(2, 14:44)){
-  print(paste0("Summary of ", colnames(data1)[col], " :"))
-  print(summary(data.frame(data1)[,col]))
+```{r eval=FALSE, quickhist}
+# plot distributions instead of showing numbers
+# Function for original liquor sales variables
+# y is column number of master df, x is binwidth for hist
+quick_hist <- function(y, x = 0) {
+  npl <- y-13
+  test =data1[, y, with=F]
+  test <- na.omit(test)
+  x = ifelse(x==0, (max(test)-min(test))/30, x)
+  nameold <- colnames(test)[1]
+  namevar <- gsub(" ", "_", nameold)
+  setnames(test, nameold, namevar)
+  meanc = as.numeric(colMeans(test[,1,with=F], na.rm=T))
+  plt <- ggplot(data = test, aes_string(x=colnames(test)[1])) +
+    geom_histogram(binwidth = x) +
+    geom_vline(data=test,aes_string(xintercept=as.numeric(meanc)),
+               linetype="dashed", colour="red", size=1) + 
+    ggtitle(paste0(as.character(npl), ". ",  
+                   "# Obs: ", as.character(nrow(na.omit(test))),", ", 
+                   "Mean: ", as.character(round(meanc, digits=2)))) +
+    theme(plot.title=element_text(face="bold", size = 8))
+  rm(test)
+  return(plt)
 }
 
-
-for (col in c(1, 2, 3, 6, 8, 9, 12, 13, 14, 15, 18)){
-  print(paste("Count of unique observations of", colnames(data1)[col], "is:", length(unique(data.frame(data1)[,col]))))
+# For meteorological variables - group by DATE, ZIPCODE
+quick_hist_meteo <- function(y, x = 0) {
+  npl <- y-13
+  test=data1[,c(1,2,y), with=F]
+  test <- na.omit(test)
+  x = ifelse(x==0, (max(test[,3,with=F])-min(test[,3,with=F]))/30, x)
+  nameold <- colnames(test)[3]
+  namevar <- gsub(" ", "_", colnames(test)[3])
+  setnames(test, nameold, "temp")
+  test <- ddply(test, .(DATE, ZIPCODE), summarise,
+                temp=mean(temp, na.rm=T))
+  setnames(test, "temp", namevar)
+  meanc = mean(test[,3], na.rm=T)
+  plt <- ggplot(data = test, aes_string(x=colnames(test)[3])) +
+    geom_histogram(binwidth = x) +
+    geom_vline(data=test,aes_string(xintercept=as.numeric(meanc)),
+               linetype="dashed", colour="red", size=1) + 
+    ggtitle(paste0(as.character(npl), ". ",  
+                   "# Obs: ", as.character(nrow(na.omit(test))),", ", 
+                   "Mean: ", as.character(round(meanc, digits=2)))) +
+    theme(plot.title=element_text(face="bold", size = 8))
+  rm(test)
+  return(plt)
 }
+
+# For demographic variables - group by DATE, ZIPCODE
+quick_hist_demos <- function(y, x = 0) {
+  npl <- y-13
+  test <- data1[,c(1,y), with=F]
+  test <- data.table(na.omit(test))
+  x = ifelse(x==0, (max(test[,2,with=F])-min(test[,2,with=F]))/30, x)
+  nameold <- colnames(test)[2]
+  namevar <- gsub(" ", "_", colnames(test)[2])
+  setnames(test, nameold, "temp")
+  test <- ddply(test, .(ZIPCODE), summarise,
+                temp=mean(temp, na.rm=T))
+  colnames(test)[2] <- namevar
+  test <- data.table(test)
+  meanc = mean(test[,2], na.rm=T)
+  plt <- ggplot(data = test, aes_string(x=colnames(test)[2])) +
+    geom_histogram(binwidth = x) +
+    geom_vline(data=test,aes_string(xintercept=as.numeric(meanc)),
+               linetype="dashed", colour="red", size=1) + 
+    ggtitle(paste0(as.character(npl), ". ",  
+                   "# Obs: ", as.character(nrow(na.omit(test))),", ", 
+                   "Mean: ", as.character(round(meanc, digits=2)))) +
+    theme(plot.title=element_text(face="bold", size = 8))
+  rm(test)
+  rm(meanc)
+  return(plt)
+}
+
 ```
-I would like to note that I am a bit disappointed by the completeness of the meteorological data that I ordered from the National Climatic Data Center; I also don't understand the units used for temperatures, as any transformations I tried did not return reasonable planet Earth values.. 
-
-# Analysis
-## Demographics
-
-In the following plots we will perform a high-level analysis of basic demographics.
-
-Firstly let's look at population per zipcode, so we need to group accordingly.
-
-```{r eval=FALSE, gr_zip_pop}
-gr_zip_pop <- ddply(data1[,c(1,24, seq(29,68,2), 72, 73), with=F], .(ZIPCODE), 
-                numcolwise(mean, na.rm=T))
-gr_zip_pop$ZIPCODE <- factor(gr_zip$ZIPCODE, ordered=F)
-
-#Prep for map plotting
-#Get map of Iowa using RgoogleMaps and ggmap
-CenterOfMap <- geocode("41.9137948,-93.3293731")
-Iowa <- get_map(c(lon=CenterOfMap$lon, lat=CenterOfMap$lat), zoom = 7,
-                   source = "stamen", maptype= "toner", color="bw")
-IowaMap <- ggmap(Iowa)
-```
-
-So now we've grouped per zipcode and pulled the population.
-
-I realised here that I had not actually merged the coordinates of "zipcode centre" to the master. I got around this by calculating the mean latitude and longitude of stores in the zipcode. Below lies a the map of Iowa where we overlay population bubbles per zipcode and also the location of universities; here the triangle size indicates number of students enrolled.
-
-
-```{r echo=TRUE, Demo_plots1}
-
-# Explore demographics ----------------------------------------------------
-suppressWarnings(IowaMap + 
-  geom_point(data=gr_zip_pop, aes(x=STORE_LON, y=STORE_LAT, size=POPULATION),
-             colour="red", alpha=0.5) +
-  geom_point(data = unis, aes(x=lon, y=lat, size=enrolled), colour="blue",
-             shape=17, alpha=0.5) + 
-  theme(legend.position="none", axis.title.x=element_blank(),
-        axis.title.y=element_blank(), axis.ticks=element_blank(),
-        axis.text.x=element_blank(), axis.text.y=element_blank(),
-        plot.title = element_text(size = rel(1), colour = "blue")) +
-  labs(title="Map of Iowa with population and university overlays"))
-```
-
-We can see that Davenport and Iowa city are big University cities. Regarding population, Des Moines, Waterloo, Cedar Rapids, Dubuque and Sioux City are all cities in which certain areas (zipcodes) are highly populated. It will be more useful of course to look at overall city population and that is what we are going to do now. 
-
-```{r eval=FALSE, gr_city_pop}
-
-gr_city_pop <- ddply(data1, .(ZIPCODE, CITY), summarise, 
-                     POPULATION = mean(POPULATION, na.rm=T), 
-                     STORE_LAT = mean(STORE_LAT, na.rm = T),
-                     STORE_LON = mean(STORE_LON, na.rm = T))
-gr_city_pop <- ddply(gr_city_pop, .(CITY), summarise, 
-                     TOT_POP = sum(POPULATION, na.rm = T),
-                     LAT = mean(STORE_LAT, na.rm = T), 
-                     LON = mean(STORE_LON, na.rm =T))
-```
-
-
-```{r echo=TRUE, Demo_plots2}
-IowaMap + 
-  geom_point(data=gr_city_pop, aes(x=LON, y=LAT, size=TOT_POP),
-             colour="purple", alpha=1) +
-  theme(legend.position="none", axis.title.x=element_blank(),
-        axis.title.y=element_blank(), axis.ticks=element_blank(),
-        axis.text.x=element_blank(), axis.text.y=element_blank(),
-        plot.title = element_text(size = rel(1), colour = "blue")) +
-  labs(title="Map of Iowa with city population overlay")
-```
-
-And county populations below..
-
-```{r eval=FALSE, gr_county_pop}
-
-gr_county_pop <- ddply(data1, .(ZIPCODE, COUNTY), summarise, 
-                     POPULATION = mean(POPULATION, na.rm=T), 
-                     STORE_LAT = mean(STORE_LAT, na.rm = T),
-                     STORE_LON = mean(STORE_LON, na.rm = T))
-gr_county_pop <- ddply(gr_county_pop, .(COUNTY), summarise, 
-                     TOT_POP = sum(POPULATION, na.rm = T),
-                     LAT = mean(STORE_LAT, na.rm = T), 
-                     LON = mean(STORE_LON, na.rm =T))
-```
-
-
-```{r echo=TRUE, Demo_plots3}
-IowaMap + 
-  geom_point(data=gr_county_pop, aes(x=LON, y=LAT, size=TOT_POP),
-             colour="blue", alpha=1) +
-  theme(legend.position="none", axis.title.x=element_blank(),
-        axis.title.y=element_blank(), axis.ticks=element_blank(),
-        axis.text.x=element_blank(), axis.text.y=element_blank(),
-        plot.title = element_text(size = rel(1), colour = "blue")) +
-  labs(title="Map of Iowa with county population overlay")
-```
-
-I think it's clear that the centre of Iowa is Des Moines. There are some highly populated areas along the county's contour, such as Sioux City, Omaha and Dubuque.
-
-Before moving on to the liquor sales analysis I would like to take a look at national group populations.
 
 For the following plots I used *multiplot*; a very useful function from [cookbook-r](http://www.cookbook-r.com/Graphs/Multiple_graphs_on_one_page_(ggplot2)/).
 
@@ -243,12 +218,293 @@ multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
     }
   }
 }
+```
+
+The liquor sales variables in this case are number of bottles per ordered pack, volume of bottle in millilitres,  the cost of the bottle for the state, the price it was sold to the merchant for, the total number of bottles ordered and the total money spent per order for the merchant. Let's look at their distributions.
+
+```{r echo=TRUE, quickhistliq1, warning=FALSE, cache=TRUE, cache.path='cache/', fig.path='figure/'}
+
+# Plot liquor sales stuff
+multiplot(quick_hist(14) + theme(plot.title = element_text(size=6),
+                                 axis.title = element_text(size=6)),
+          quick_hist(15) + theme(plot.title = element_text(size=6),
+                                 axis.title = element_text(size=6)),
+          quick_hist(16) + theme(plot.title = element_text(size=6),
+                                 axis.title = element_text(size=6)),
+          quick_hist(17) + theme(plot.title = element_text(size=6),
+                                 axis.title = element_text(size=6)),
+          quick_hist(18) + theme(plot.title = element_text(size=6),
+                                 axis.title = element_text(size=6)),
+          quick_hist(19) + theme(plot.title = element_text(size=6),
+                                 axis.title = element_text(size=6)),
+          cols=2)
+
+```
+
+It is not really clear what's going on so I am going to log-transform the x-axis of the cost-related variables and zoom-in closer for "PACK", "LITER SIZE" and "BOTTLE QTY".
+
+```{r echo=TRUE, quickhistliq2, warning=FALSE, cache=TRUE, cache.path='cache/', fig.path='figure/'}
+# Adjust them so we see more things
+multiplot(quick_hist(14, 2) + coord_cartesian(xlim=c(0, 50)), 
+          quick_hist(15, 50) + coord_cartesian(xlim=c(0, 2000)), 
+          quick_hist(16,0.1) + scale_x_log10(), quick_hist(17, 0.1) + scale_x_log10(), 
+          quick_hist(18,2) + coord_cartesian(c(0,100)),
+          quick_hist(19, 0.1) + scale_x_log10(), cols=3)
+```
+
+So now we can see that distributions of the cost-related have transformed to bell-shaped or normal-like. We can also clearly see the discrete nature of the other variables.
+
+Now, let's see descriptives of the meteorological variables; again these were derived after grouping by zipcode-day pairs.
+
+```{r echo=TRUE, quickhistmeteo1, warning=FALSE, cache=TRUE, cache.path='cache/', fig.path='figure/'}
+multiplot(quick_hist_meteo(22), 
+          quick_hist_meteo(23),
+          quick_hist_meteo(24),
+          quick_hist_meteo(25),
+          cols = 2)
+```
+
+For precipitation and snow it's hard to discern what's going on so I will log-transform x-axes; for the temperatures I will just make the bins finer. Here are the plots: 
+
+```{r echo=TRUE, quickhistmeteo2, warning=FALSE, cache=TRUE, cache.path='cache/', fig.path='figure/'}
+multiplot(quick_hist_meteo(22, 0.1) + scale_x_log10(), 
+          quick_hist_meteo(23, 0.1) + scale_x_log10(),
+          quick_hist_meteo(24, 2),
+          quick_hist_meteo(25, 2),
+          cols = 2)
+```
+
+I would like to note that in general I am a bit disappointed by the completeness of the meteorological data that I ordered from the National Climatic Data Center; I also don't understand the units used for temperatures, as any transformations I tried did not return reasonable planet Earth values.. 
+
+The above plots are a bit hard to interpret as they are, because zipcodes are not represented uniformly; e.g. zipcode x may have meteorological readings for all days whereas others just for 5 days. If one desires to perform some inference on Iowa weather, the simplest way would be to generate the same plots for individual zipcodes.
+
+Now onto the final partition of variables, the demographics. These include ethnic groups/nationalities percentages and total drinking establishments - grouped by zipcode.
+
+```{r echo=TRUE, quickhistdemo1, warning=FALSE, cache=TRUE, cache.path='cache/', fig.path='figure/'}
+# Plot demographic variables
+multiplot(quick_hist_demos(20),
+          quick_hist_demos(26), quick_hist_demos(27), quick_hist_demos(28),
+          quick_hist_demos(29), quick_hist_demos(30), quick_hist_demos(31),
+          quick_hist_demos(32), quick_hist_demos(33), quick_hist_demos(34),
+          quick_hist_demos(35), quick_hist_demos(36), quick_hist_demos(39),
+          quick_hist_demos(40), quick_hist_demos(41), quick_hist_demos(42), 
+          quick_hist_demos(43), quick_hist_demos(44), quick_hist_demos(45),
+          cols = 5)
+```
+
+From plots 14, 15 and 32 I guess it is clear that Iowa's population is predominantly white. Without knowing too much about US geodemographics, presumably this is a "heartland" characteristic?
+
+Otherwise I am surprised to see the magnitude of the German population - almost 50% on average! It can't be true that half the Iowa population is German people, so I guess these categories pertain to "heritage" in general. Which means almost half of the Iowans are of German descent. 
+
+Also common is English, Scottish, French and Dutch heritage. In these histograms, one can see that the black and Hispanic and white group distributions exhibit long-tails, implying that there exist specific areas where these populations are much more (or less) prevalent than generally encountered in Iowa.
+
+The "outlier" plot category in this panel is the total number of drinking establishments per zipcode - included here for thoroughness purposes.
+
+In addition to the above, I think it would be useful to show the most popular categories of liquors and individual types.
+
+The dataset contains 69 different categories, so it will be hard to visualise all of them in a plot. In this case just showing a table is also informative.
+
+```{r eval=FALSE, gr_cat}
+gr_cat <- ddply(data1, .(`CATEGORY NAME`), summarise,
+                           bottles=sum(`BOTTLE QTY`, na.rm=T), price=mean(`BTL PRICE`))
+```
+
+```{r echo=TRUE, gr_cat_show}
+arrange(gr_cat, -bottles)
+```
+
+We see that 80 proof vodka is the most popular liquor type in Iowa by some margin. Canadian whiskies are also very popular. Also popular are rums, cheap whiskies and tequila. There also exists a category without a name which has a relatively high average price.
+
+On the contrary, the least popular liquors are high proof beer (only 38 bottles sold - a categorisation outlier? A one-off order?) and liqueurs like Anisette (I imagine this is like ouzo), crème liqueurs,  and spearmint schnapps (peppermint schnapps on the other hand is quite popular - both must taste like cough medicine!).
+
+Let's see the most and least popular individual liquors.
+
+```{r eval=FALSE, gr_item}
+gr_item <- ddply(data1, .(DESCRIPTION), summarise,
+                 bottles=sum(`BOTTLE QTY`, na.rm=T), price=mean(`BTL PRICE`))
+```
+
+```{r echo=TRUE, gr_item_show_most}
+#Most popular
+arrange(gr_item, -bottles)[1:30,]
+```
+
+Surprisingly I've never noticed most of these spirits at bars in Europe. Altogether though this list was what I expected: vodkas, whiskeys and rums and there are a few global household names in there such as Captain Morgan, Jack Daniels, Smirnoff, Jagermeister, etc.. One thing is for sure though.. Iowans love vodka and particularly the cheaper local variety! I'm also a bit curious regarding the popularity of cinnamon whiskey. Maybe a success with the student population?
+
+```{r echo=TRUE, gr_item_show_least}
+#Least popular
+arrange(gr_item, bottles)[1:30,]
+```
+
+All items in the top 30 least popular list are in a sense outliers as at most 4 bottles have been ordered altogether. These probably correspond to single orders, and it is likely that some kind of data recording inconsistency has taken place (e.g. product description entered somehow differently).
+
+Interestingly however, a few rather expensive liquors are included in this list - mainly bourbons and whiskeys. For example, two orders were placed for "Cedar Ridge Barrel Proof Bourbon" - with a bottle price of 8700 (!). It turns out that two separate orders were placed on 27/10 and 29/10 by two separate "Hy-Vee Food" stores in different zipcodes in Cedar Rapids. Interesting - anyone's guess really as to the background story. It has to be a special order for a specific customer (maybe they broke the first bottle? An expensive mistake!).
+
+###Initial multivariate exploration
+
+In this part I intended to show some exploratory scatter plots between variables in order to visually identify any stand-out associations, by making use of the great *ggpairs* function of GGally. There are a couple of issues though. For one, the number of observations is quite large (~2.5m) and also, the dataset contains 49 variables. There is no way *ggpairs* will produce a sensible display so we need to be a bit clever and restrict what we feed it.
+
+As a first attempt, let's look at associations between proportions of national heritage group proportions.
+
+This one is fairly easy to display, as observations are unique per zipcode (thus restricting the number of observations to about 350 - the number of unique zipcodes) and I have included 20 relevant variables in the data. Let's see what we get.
+
+```{r eval=FALSE, gr_zip_pop}
+gr_zip_pop <- ddply(data1[,c(1,24, seq(29,68,2), 72, 73), with=F], .(ZIPCODE), 
+                numcolwise(mean, na.rm=T))
+gr_zip_pop$ZIPCODE <- factor(gr_zip$ZIPCODE, ordered=F)
+```
+
+```{r echo=TRUE, ggpairs1, warning=FALSE, cache=TRUE, cache.path='cache/', fig.path='figure/'}
+ggpairs(gr_zip_pop, columns=3:22, axisLabels = 'internal',
+        upper = "blank", lower=list(params=list(size=1)),
+        params = c(Shape = I("."), outlier.shape = I(".")), 
+        title="Scatter plots between national heritage group proportions") + 
+  theme(legend.position = "none",
+        panel.grid.major = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_blank())
+```
+
+The display is a bit compressed but we can still observe positive linear correlations between hispanic and mexican, english and scottish, english and irish, french and irish. We can also spot a few negative correlations such as german and english, german and french, black and white, asian and white. I think these displays aren't very informative.
+
+Next, let's look at scatter plots between the main variables of interest in the original liquor sales data. I will perform the analysis on a reasonably sized subset of the data by restricting to a single zipcode (50314 - the highest populated zipcode in Des Moines).
+
+```{r eval=FALSE, pairs2}
+pairs2 <- data1[data1$ZIPCODE==50314][,c(14, 15,16,17,18,19),with=F]
+#ggpairs does not like spaces in variable names
+setnames(pairs2, "STATE BTL COST", "STATE_BTL_COST")
+setnames(pairs2, "LITER SIZE", "LITER_SIZE")
+setnames(pairs2, "BTL PRICE", "BTL_PRICE")
+setnames(pairs2, "BOTTLE QTY", "BOTTLE_QTY")
+```
+
+```{r echo=TRUE, ggpairs2, warning=FALSE, cache=TRUE, cache.path='cache/', fig.path='figure/'}
+ggpairs(pairs2, axisLabels = 'internal',
+        upper = "blank", lower=list(params=list(size=1)),
+        params = c(Shape = I("."), outlier.shape = I("."))) + 
+  theme(legend.position = "none",
+        panel.grid.major = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_blank())
+```
+
+So the raw output here is not very informative and in order to see more one has to adjust axes, convert scales, etc. This will take place for variables of interest later on in this work. But a quick scan through the plots shows a very strong linear correlation between state buying and selling price of items; this implies a fixed profit (in terms of percentage) is set by the state. Also correlated, as expected, are bottle quantities sold per transaction and total money spent per transaction.
+
+I spent some time trying some variable groupings with *ddply* in order to find some interesting combinations to input to *ggpairs* but was unable to produce any particularly interesting visualisations at this preliminary exploratory stage. I think that due to plot size restrictions, *ggpairs* is not the best tool to use for a dataset of this magnitude in terms of number of observations and variables. I also found it was quite hard to find a way to adjust font sizes in the various sections of the output - especially on the diagonal.
+
+# Analysis
+## Demographics
+
+In the following plots we will perform a high-level analysis of basic demographics.
+
+Firstly let's look at population per zipcode, so we need to group accordingly (we'll use the gr_zip_pop variable we defined earlier on).
+
+```{r eval=FALSE, map_plot_prep}
+
+#Prep for map plotting
+#Get map of Iowa using RgoogleMaps and ggmap
+CenterOfMap <- geocode("41.9137948,-93.3293731")
+Iowa <- get_map(c(lon=CenterOfMap$lon, lat=CenterOfMap$lat), zoom = 7,
+                   source = "stamen", maptype= "toner", color="bw")
+IowaMap <- ggmap(Iowa)
+```
+
+So now we've grouped per zipcode and pulled the population.
+
+I realised here that I had not actually merged the coordinates of "zipcode centre" to the master. I got around this by calculating the mean latitude and longitude of stores in the zipcode. Below lies a the map of Iowa where we overlay population bubbles per zipcode and also the location of universities; here the triangle size indicates number of students enrolled.
+
+
+```{r echo=TRUE, Demo_plots1, warning=FALSE, cache=TRUE, cache.path='cache/', fig.path='figure/'}
+
+# Explore demographics ----------------------------------------------------
+suppressWarnings(IowaMap + 
+  geom_point(data=gr_zip_pop, aes(x=STORE_LON, y=STORE_LAT, size=POPULATION),
+             colour="red", alpha=0.5) +
+  geom_point(data = unis, aes(x=lon, y=lat, size=enrolled), colour="blue",
+             shape=17, alpha=0.5) + 
+  theme(legend.position="none", axis.title.x=element_blank(),
+        axis.title.y=element_blank(), axis.ticks=element_blank(),
+        axis.text.x=element_blank(), axis.text.y=element_blank(),
+        plot.title = element_text(size = rel(1), colour = "blue")) +
+  labs(title="Map of Iowa with population and university overlays"))
+```
+
+We can see that Davenport and Iowa city are big University cities. Regarding population, Des Moines, Waterloo, Cedar Rapids, Dubuque and Sioux City are all cities in which certain areas (zipcodes) are highly populated. It will be more useful of course to look at overall city population and that is what we are going to do now. 
+
+```{r eval=FALSE, gr_city_pop}
+
+gr_city_pop <- ddply(data1, .(ZIPCODE, CITY), summarise, 
+                     POPULATION = mean(POPULATION, na.rm=T), 
+                     STORE_LAT = mean(STORE_LAT, na.rm = T),
+                     STORE_LON = mean(STORE_LON, na.rm = T))
+gr_city_pop <- ddply(gr_city_pop, .(CITY), summarise, 
+                     TOT_POP = sum(POPULATION, na.rm = T),
+                     LAT = mean(STORE_LAT, na.rm = T), 
+                     LON = mean(STORE_LON, na.rm =T))
+```
+
+
+```{r echo=TRUE, Demo_plots2, warning=FALSE, cache=TRUE, cache.path='cache/', fig.path='figure/'}
+IowaMap + 
+  geom_point(data=gr_city_pop, aes(x=LON, y=LAT, size=TOT_POP),
+             colour="purple", alpha=1) +
+  theme(legend.position="none", axis.title.x=element_blank(),
+        axis.title.y=element_blank(), axis.ticks=element_blank(),
+        axis.text.x=element_blank(), axis.text.y=element_blank(),
+        plot.title = element_text(size = rel(1), colour = "blue")) +
+  labs(title="Map of Iowa with city population overlay")
+```
+
+And county populations below..
+
+```{r eval=FALSE, gr_county_pop}
+
+gr_county_pop <- ddply(data1, .(ZIPCODE, COUNTY), summarise, 
+                     POPULATION = mean(POPULATION, na.rm=T), 
+                     STORE_LAT = mean(STORE_LAT, na.rm = T),
+                     STORE_LON = mean(STORE_LON, na.rm = T))
+gr_county_pop <- ddply(gr_county_pop, .(COUNTY), summarise, 
+                     TOT_POP = sum(POPULATION, na.rm = T),
+                     LAT = mean(STORE_LAT, na.rm = T), 
+                     LON = mean(STORE_LON, na.rm =T))
+```
+
+
+```{r echo=TRUE, Demo_plots3, cache=TRUE, cache.path='cache/', fig.path='figure/'}
+IowaMap + 
+  geom_point(data=gr_county_pop, aes(x=LON, y=LAT, size=TOT_POP),
+             colour="blue", alpha=1) +
+  theme(legend.position="none", axis.title.x=element_blank(),
+        axis.title.y=element_blank(), axis.ticks=element_blank(),
+        axis.text.x=element_blank(), axis.text.y=element_blank(),
+        plot.title = element_text(size = rel(1), colour = "blue")) +
+  labs(title="Map of Iowa with county population overlay")
+```
+
+I think it's clear that the centre of Iowa is Des Moines. There are some highly populated areas along the county's contour, such as Sioux City, Omaha and Dubuque.
+
+Before moving on to the liquor sales analysis I would like to take a look at national group populations.
+
+```{r eval=FALSE, plot_map_nat_over}
+#My save-space function for plotting
+plot_map_nat_over <- function(y){
+  x <- colnames(gr_zip_pop)[y]
+  IowaMap + 
+    geom_point(data=gr_zip_pop, aes_string(x="STORE_LON", y="STORE_LAT",
+                                           colour=x, alpha=x)) +
+    scale_colour_gradientn(colours = topo.colors(10), limits=c(0,50)) +
+    theme(legend.position="none", axis.title.x=element_blank(),
+          axis.title.y=element_blank(), axis.ticks=element_blank(),
+          axis.text.x=element_blank(), axis.text.y=element_blank(),
+          plot.title = element_text(size = rel(1), colour = "blue")) +
+    labs(title=x)
+}
 
 ```
 
 In the composite plot below I am producing something like a heat map for population percentages per zipcode for a selection of nationalities; "cold" is blue and "hot" is yellow/brown (I found it hard to overlay a global legend.)
 
-```{r echo=TRUE, Demo_plots4}
+```{r echo=TRUE, Demo_plots4, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 
 #Produce maps with overlays for all nationalities
 
@@ -273,7 +529,7 @@ test$ZIPCODE <- factor(test$ZIPCODE)
 gr_zip_pop <- left_join(gr_zip_pop, test)
 rm(test)
 ```
-```{r echo=TRUE, Demo_plots5}
+```{r echo=TRUE, Demo_plots5, warning=FALSE, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 #Plot
 suppressWarnings(IowaMap + 
   geom_point(data=gr_zip_pop, aes(x=STORE_LON, y=STORE_LAT, size=TOTAL_EST),
@@ -315,7 +571,7 @@ rm(gr_st_month.part_stores)
 
 And on to a boxplot which illustrates the monthly distribution of the number of transactions recorded in the database; I also incorporated information for the number of stores appearing in the data on a monthly basis as a colour variable.
 
-```{r echo=TRUE, auditplot1}
+```{r echo=TRUE, auditplot1, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 #Number of reports per month and num. of participating stores overlay
 ggplot(data=gr_st_month_count, aes(x=month, y=count_reps)) + 
   stat_boxplot(geom='errorbar') + geom_jitter(alpha=0.2) + 
@@ -348,7 +604,7 @@ rm(gr_st_week.part_stores)
 ```
 
 
-```{r echo=TRUE, auditplot2}
+```{r echo=TRUE, auditplot2, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 #Plot: same as plot 1 but using boxplot colour as part. stores variable
 ggplot(data=gr_st_week_count, aes(x=week, y=count_reps)) + 
   stat_boxplot(geom='errorbar') + geom_jitter(alpha=0.2) + 
@@ -377,7 +633,7 @@ gr_st_day_count <- left_join(gr_st_day_count, gr_st_day.part_stores)
 rm(gr_st_day.part_stores)
 ```
 
-```{r echo=TRUE, auditplot3}
+```{r echo=TRUE, auditplot3, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 ggplot(data=gr_st_day_count, aes(x=as.character(day), y=count_reps)) + 
   stat_boxplot(geom='errorbar') + geom_jitter(alpha=0.2) + 
   geom_boxplot(aes(fill=part_stores), outlier.size=0) +
@@ -419,7 +675,7 @@ rm(gr_st_weekday.part_stores)
 ```
 
 
-```{r echo=TRUE, auditplot4}
+```{r echo=TRUE, auditplot4, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 #Plot data
 ggplot(data=gr_st_weekday_count, aes(x=weekday, y=count_reps)) + 
   stat_boxplot(geom='errorbar') + geom_jitter(alpha=0.2) + 
@@ -444,7 +700,7 @@ Let's look at various dataset properties.
 
 Plotting the distribution of bottles sold per transaction.
 
-```{r echo=TRUE, Liqplots1}
+```{r echo=TRUE, Liqplots1, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 
 ggplot(data=data1, aes(x=`BOTTLE QTY`)) +
   geom_histogram(aes(y =..density..),
@@ -459,7 +715,7 @@ ggplot(data=data1, aes(x=`BOTTLE QTY`)) +
 
 Not easy to see shape of distribution. Looking at log-transform.
 
-```{r echo=TRUE, Liqplots2}
+```{r echo=TRUE, Liqplots2, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 bks <- seq(min(data1$`BOTTLE QTY`, na.rm=T), max(data1$`BOTTLE QTY`, na.rm=T))
 ggplot(data=data1, aes(x=`BOTTLE QTY`)) +
   geom_histogram(aes(y =..density..),
@@ -475,7 +731,7 @@ ggplot(data=data1, aes(x=`BOTTLE QTY`)) +
 
 The log transform shows that the amount of bottles sold per transaction is to a large extent "quantised" (or non-uniform?). Let's focus on the denser area of the distribution with un-transformed axes. 
 
-```{r echo=TRUE, Liqplots3}
+```{r echo=TRUE, Liqplots3, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 
 ggplot(data=data1, aes(x=`BOTTLE QTY`)) +
   geom_histogram(aes(y =..density..),
@@ -514,7 +770,7 @@ rm(test)
 
 And the plot follows..
 
-```{r echo=TRUE, Liqplots4, fig.width=12, fig.height=9}
+```{r echo=TRUE, Liqplots4, fig.width=12, fig.height=9, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 ggplot(data=gr_date.Jan_May,aes(x=DATE, y=bottles/maxbottles, colour=type)) + 
   geom_point()+ geom_line() +
                             geom_ribbon(aes(ymin=0, ymax=bottles/maxbottles, fill=type)) +
@@ -527,7 +783,7 @@ ggplot(data=gr_date.Jan_May,aes(x=DATE, y=bottles/maxbottles, colour=type)) +
 
 When we look at the raw time series of the quantity of bottles ordered, we see some type of seasonality but it is not easy to interpret. However, once we attenuate the population effect, we see a very stable weekly pattern spiking on a single weekday. Let's look at this data in more detail.
 
-```{r echo=TRUE, Liqplots5}
+```{r echo=TRUE, Liqplots5, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 p1 <- ggplot(data=filter(gr_date.Jan_May, type=="BOTTLES_NORM"),
        aes(x=factor(weekdays(DATE), levels=day.names),
                              y=bottles)) +geom_boxplot()+
@@ -553,7 +809,7 @@ It is a bit counter-intuitive though that in a previous plot we saw that the num
 One last note on the previous weekday analysis. Let's plot the raw and population-adjusted quantities against each other and see what we get. I hope it will show a bit more on how the normalisation helped the analysis. 
 
 
-```{r echo=TRUE, Liqplots6}
+```{r echo=TRUE, Liqplots6, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 ggplot(data=gr_date.Jan_May,aes(x=bottles[type=="BOTTLES"]/maxbottles[type=="BOTTLES"], 
                                 y=bottles[type=="BOTTLES_NORM"]/maxbottles[type=="BOTTLES_NORM"],
                                 shape=weekdays(DATE[type=="BOTTLES"]),
@@ -567,34 +823,55 @@ I like this plot because it looks like a machine learning exercise.. We see here
 
 In this small section I will group data per item (liquor) and plot the relationship between number of bottles ordered and bottle price.
 
-Firstly let's create our data frame.
-```{r eval=F, gr_item}
-# group by item
-gr_item <- ddply(data1, .(DESCRIPTION), summarise,
-                 bottles=sum(`BOTTLE QTY`, na.rm=T), price=mean(`BTL PRICE`))
-```
+We've already generated the relevant data frame gr_item.
 
 Here is the raw plot...
 
-```{r echo=TRUE, Liqplots7}
+```{r echo=TRUE, Liqplots7, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 #plot raw
-ggplot(data=gr_item, aes(x=bottles, y=price)) + geom_point()
+ggplot(data=gr_item, aes(x=price, y=bottles)) + geom_point()
 ```
 
 We don't see too much. In these cases it is often helpful to log-transform axes.
 
-```{r echo=TRUE, Liqplots8}
+```{r echo=TRUE, Liqplots8, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 #plot log-transformed
 #good relationship
-ggplot(data=gr_item, aes(x=bottles, y=price)) + geom_point() +
-  scale_y_log10() + scale_x_log10() + geom_smooth(fill="red")
+ggplot(data=gr_item, aes(x=price, y=bottles)) + geom_point(alpha=0.3) +
+  scale_y_log10() + scale_x_log10()+ geom_smooth(fill="red") 
 ```
 
-Theer is a clear relationship between bottle price and quantities ordered. Specifically there is a negative trend which is linear for the most of the observations; however we can see higher price-demand variance for the more expensive liquors.
+Let's focus on the main body of observations. The function that adds the annotation to the following plot was taken from [stackoverflow](http://stackoverflow.com/questions/7549694/ggplot2-adding-regression-line-equation-and-r2-on-graph)..
+
+```{r echo=TRUE, Liqplots8b, cache=TRUE, warning=FALSE,cache.path='cache/', fig.path='figure/'}
+#Define lm_eqn function that adds model annotation
+lm_eqn = function(m) {
+  
+  l <- list(a = format(coef(m)[1], digits = 2),
+            b = format(abs(coef(m)[2]), digits = 2),
+            r2 = format(summary(m)$r.squared, digits = 3));
+  
+  if (coef(m)[2] >= 0)  {
+    eq <- substitute(italic(y) == a + b %.% italic(x)*","~~italic(r)^2~"="~r2,l)
+  } else {
+    eq <- substitute(italic(y) == a - b %.% italic(x)*","~~italic(r)^2~"="~r2,l)    
+  }
+  
+  as.character(as.expression(eq));                 
+}
+#Plot
+ggplot(data=gr_item, aes(x=price, y=bottles)) + geom_point(alpha=0.3) +
+  scale_y_log10() + scale_x_log10(limits=c(5,250))+ geom_smooth(method="lm",fill="red") +
+  geom_text(x = log10(150), y = log10(1e+05), 
+            label = lm_eqn(lm(log10(bottles)~log10(price),gr_item)),
+            parse = TRUE)
+```
+
+There is a a weak association (R-squared 0.13) between bottle price and quantities ordered. Therefore, from the plots above one cannot detect a simple function that links price and demand, however it is obvious that the relationship is inverse.
 
 ### Relationships between order quantities of different liquors
 
-In this small section I would like to look at order quantities as time series (note: using full dataset for this part). Let's calculate our dataframe first, where we group by month and liquor category, calculate total bottles ordered per category/month and derive from this a relevant normalised variable representing percentages over total bottles ordered.
+In this small section I would like to look at order quantities as time series (note: using full dataset for this part). Let's calculate our data frame first, where we group by month and liquor category, calculate total bottles ordered per category/month and derive from this a relevant normalised variable representing percentages over total bottles ordered.
 
 ```{r eval=FALSE, gr_date_cat2}
 gr_date_cat2 <- ddply(data1, .(DATE, `CATEGORY NAME`), summarise, 
@@ -609,37 +886,53 @@ gr_date_cat3 <- ddply(gr_date_cat2.month, .(Month), summarise,
 gr_date_cat2.month <- left_join(gr_date_cat2.month, gr_date_cat3)
 gr_date_cat2.month$BCAT_NORM <- gr_date_cat2.month$BOTTLES/gr_date_cat2.month$TOT_BOTT
 setnames(gr_date_cat2.month, 2, "CATEGORY")
+
+# Some necessary manipulation for ggplot2 intricacies
+dec_dates <- decimal_date(as.Date(c("2014-01-01", "2014-02-01", "2014-03-01",
+                                    "2014-04-01", "2014-05-01", "2014-06-01",
+                                    "2014-07-01", "2014-08-01", "2014-09-01",
+                                    "2014-10-01", "2014-11-01", "2014-12-01")))
+
+gr_date_cat2.month <- mutate(
+  gr_date_cat2.month, month_nom = ifelse(Month=="January", dec_dates[1], ifelse(Month=="February", dec_dates[2], ifelse(Month=="March", dec_dates[3], ifelse(Month=="April", dec_dates[4], ifelse(Month=="May", dec_dates[5], ifelse(Month=="June", dec_dates[6], ifelse(Month=="July", dec_dates[7], ifelse(Month=="August", dec_dates[8], ifelse(Month=="September", dec_dates[9], ifelse(Month=="October", dec_dates[10], ifelse(Month=="November", dec_dates[11], ifelse(Month=="December", dec_dates[12], 0)))))))))))))
+gr_date_cat2.month[gr_date_cat2.month$CATEGORY=="",]$CATEGORY <- "UNKNOWN"
 ```
 
 In the subsequent plots I show time series of normalised bottle quantities of orders for each liquor category per month; I have added a colour overlay of season (winter, spring,...) in order to discern seasonal patterns more easily.
 
-```{r echo=TRUE, Liqplots9, fig.width=12, fig.height=9}
-ggplot(data=gr_date_cat2.month, aes(x=Month, y=BCAT_NORM, group=1)) +
-  facet_wrap(~ CATEGORY, scales = "free_y") +
+```{r echo=TRUE, Liqplots9, fig.width=12, fig.height=9, cache=TRUE, cache.path='cache/', fig.path='figure/'}
+# Settings for ggplot2
+txmin <- decimal_date(as.Date(c("2014-01-01", "2014-03-01", "2014-06-01","2014-09-01", "2014-12-01")))
+txmax <- c(decimal_date(as.Date(c("2014-03-01", "2014-06-01", "2014-09-01","2014-12-01"))), Inf)
+tymin <- rep(-Inf, 5)
+tymax <- rep(Inf, 5)
+season= c("1.winter", "2.spring","3.summer","4.autumn","1.winter")
+rects <- data.frame(txmin,txmax,tymin,tymax,season)
+rects[,5] <- sapply(rects[,5], as.character)
+colScale <- c(col2hcl("blue"), col2hcl("green"), col2hcl("red"), col2hcl("purple"), col2hcl("blue"))
+
+
+#Plotting
+ggplot(data=gr_date_cat2.month) +
+  geom_rect(data=rects, aes(xmin=txmin,xmax=txmax,ymin=tymin,ymax=tymax, 
+                            fill=season), alpha=0.4)+
+  scale_fill_manual(values=colScale)+
+  geom_line(aes(x=month_nom, y=BCAT_NORM, group=1))+
+  facet_wrap(~CATEGORY, scales="free_y")+
   labs(x="Month", y = "Normalised bottle sales", 
        title = "Liquor categories bottle sales with season overlay") + 
   theme(panel.background = element_rect(fill = 'white'),
-        strip.text = element_text(size=7, colour="blue"),
+        strip.text = element_text(size=7),
         strip.background = element_rect(fill="white"),
         axis.text.y = element_blank(),
         axis.text.x = element_blank(),
-        axis.ticks=element_blank()) +
-  geom_rect(data=NULL,aes(xmin="January",xmax="March",ymin=-Inf,ymax=Inf),
-            fill="royalblue1") +
-  geom_rect(data=NULL,aes(xmin="March",xmax="June",ymin=-Inf,ymax=Inf),
-            fill="greenyellow") +
-  geom_rect(data=NULL,aes(xmin="June",xmax="September",ymin=-Inf,ymax=Inf),
-            fill="tomato") +
-  geom_rect(data=NULL,aes(xmin="September",xmax="December",ymin=-Inf,ymax=Inf),
-            fill="violet") +
-  geom_rect(data=NULL,aes(xmin="December",xmax=Inf,ymin=-Inf,ymax=Inf),
-            fill="royalblue1") +
-  geom_line()
+        axis.ticks=element_blank(),
+        plot.title = element_text(size = rel(1), colour = "blue"))
 ```
 
-A few (qualitative) observations can be made. We can identify that certain liquor types have a demand curve that only peaks in December, for example liqueurs with various flavours like creme de menthe/cacao/etc., brandies and some types of schnapps (cinammon, butterscotch). Given that these types of liquors have a heavier taste and are generally considered "warming", their demand curve makes sense - we identified the "winter drinks".
+A few (qualitative) observations can be made. We can identify that certain liquor types have a demand curve that only peaks in December, for example liqueurs with various flavours like crème de menthe/cacao/etc., brandies and some types of schnapps (cinnamon, butterscotch). Given that these types of liquors have a heavier taste and are generally considered "warming", their demand curve makes sense - we identified the "winter drinks".
 
-Another observation that makes sense, is the very similar curve shape of tequila and triple sec; two of the margarita ingredients (on the side I plotted respective bottle quantities to see if the 2:1 margarita ratio is reflected in bottle quantities - it didn't). This demand pattern is there for a few of the liquors (flavoured rums, imported vodka, where bottle quantities are clearly correlated with expected average temperatures (demand lowest in winter, climbs gradually in spring, peaks between mid-spring/mid-summer, gradually descends in autumn). As opposed to the previous category, these are the "summer drinks".
+Another observation that makes sense, is the very similar curve shape of tequila and triple sec; two of the margarita's ingredients (on the side I plotted respective bottle quantities to see if the 2:1 margarita ratio is reflected in bottle quantities - it didn't). This demand pattern is there for a few of the liquors (flavoured rums, imported vodka), where bottle quantities are clearly correlated with expected average temperatures (demand lowest in winter, climbs gradually in spring, peaks between mid-spring/mid-summer, gradually descends in autumn). As opposed to the previous category, these are the "summer drinks".
 
 There is a lot of work that can still be performed here with good potential for hidden insights. Just by looking at the time series we can identify interesting patterns which don't make immediate sense. For example:
 
@@ -700,27 +993,144 @@ corr.cat.ts.max <- lapply(corr.cat.ts.dec, function(x) x[2:4])
 
 In the following lists we display the highest correlations (positive and negative) per category.
 
-```{r echo=TRUE, corrs_max_min}
+```{r echo=TRUE, corrs_max}
 #Maximum positive correlations per category
 sapply(corr.cat.ts.max, function(x) names(x))
+```
+
+Looking at the results, I was again happy to see that the highest correlated liquor with Triple sec is Tequila (0.86) - Margarita cocktails are very popular in Iowa also it seems! The correlation of Triple sec with "Imported Vodka"" was notably high as well (0.82).
+
+Looking at the top correlations for Tequila, we see cocktail mixers (cordials/liqueurs and triple sec) and the third one is also imported vodka.
+
+A quick look at the negative correlations now.
+
+```{r echo=TRUE, corrs_min}
 #Maximum negative correlations per categor
 sapply(corr.cat.ts.min, function(x) names(x))
 ```
 
+Unfortunately liquors which are outliers in terms of the very low quantities ordered, in generate correlate highly negatively with the other categories.
+
+Looking at Tequila's top negative correlations we see high proof beer, peach brandies and decanters & specialty packages.
+
+It would be useful to plot tequila against its highest positive and negative correlations and see what we get 
+
+```{r echo=TRUE, TEQcorrs, fig.width=12, fig.height=9, warning=FALSE, cache=TRUE, cache.path='cache/', fig.path='figure/'}
+#Produce plots
+
+test1 <- ggplot(data=gr_date_cat.spread[,c(64,44)],aes(x=`MISC. IMPORTED CORDIALS & LIQUEURS`, y=TEQUILA)) +
+  geom_point() +
+  geom_smooth(method=lm) +  
+  geom_text(x = 1500, y = 10000, 
+            label = lm_eqn(lm(TEQUILA~`MISC. IMPORTED CORDIALS & LIQUEURS`,gr_date_cat.spread[c(64,44)])),
+            parse = TRUE, size = 3)
+
+test2 <- ggplot(data=gr_date_cat.spread[,c(64,65)],aes(x=`TRIPLE SEC`, y=TEQUILA)) +
+  geom_point() +
+  geom_smooth(method=lm) +  
+  geom_text(x = 1500, y = 10000, 
+                label = lm_eqn(lm(TEQUILA~`TRIPLE SEC`,gr_date_cat.spread[c(64,65)])),
+                parse = TRUE, size = 3)
+
+test3 <- ggplot(data=gr_date_cat.spread[,c(64,39)],aes(x=`IMPORTED VODKA - MISC`, y=TEQUILA)) +
+  geom_point() +
+  geom_smooth(method=lm) +  
+  geom_text(x = 1500, y = 10000, 
+            label = lm_eqn(lm(TEQUILA~`IMPORTED VODKA - MISC`,gr_date_cat.spread[c(64,39)])),
+            parse = TRUE, size = 3)
+
+
+test4 <- ggplot(data=gr_date_cat.spread[,c(64,33)],aes(x=`HIGH PROOF BEER`, y=TEQUILA)) +
+  geom_point() +
+  geom_smooth(method=lm, colour="red") +  
+  geom_text(x = 5, y = 15000, 
+            label = lm_eqn(lm(TEQUILA~`HIGH PROOF BEER`,gr_date_cat.spread[c(64,33)])),
+            parse = TRUE, size = 3)
+
+test5 <- ggplot(data=gr_date_cat.spread[,c(64,48)],aes(x=`PEACH BRANDIES`, y=TEQUILA)) +
+  geom_point() +
+  geom_smooth(method=lm, colour="red") +  
+  geom_text(x = 500, y = 10000, 
+            label = lm_eqn(lm(TEQUILA~`PEACH BRANDIES`,gr_date_cat.spread[c(64,48)])),
+            parse = TRUE, size = 3)
+
+test6 <- ggplot(data=gr_date_cat.spread[,c(64,26)],aes(x=`DECANTERS & SPECIALTY PACKAGES`, y=TEQUILA)) +
+  geom_point() +
+  geom_smooth(method=lm, colour="red") +  
+  geom_text(x = 5000, y = 12000, 
+            label = lm_eqn(lm(TEQUILA~`DECANTERS & SPECIALTY PACKAGES`,gr_date_cat.spread[c(64,26)])),
+            parse = TRUE, size = 3)
+
+multiplot(test1, test2, test3, test4, test5, test6, cols=2)
+```
+
+Here we see that for the highest positive correlations there is indeed a clear linear trend. In the contrary, the highest negative correlations do not really display a strong linear trend. 
+
+Out of curiosity, let's produce the relevant displays for 80 proof vodka.
+
+```{r echo=TRUE, VODcors, fig.width=12, fig.height=9, warning=FALSE, cache=TRUE, cache.path='cache/', fig.path='figure/'}
+
+test1 <- ggplot(data=gr_date_cat.spread[,c(4,59)],aes(x=`SPICED RUM`, y=`80 PROOF VODKA`)) +
+  geom_point() +
+  geom_smooth(method=lm) +  
+  geom_text(x = 1500, y = 40000, 
+            label = lm_eqn(lm(`80 PROOF VODKA`~`SPICED RUM`,gr_date_cat.spread[c(4,59)])),
+            parse = TRUE, size = 3)
+
+test2 <- ggplot(data=gr_date_cat.spread[,c(4,51)],aes(x=`PUERTO RICO & VIRGIN ISLANDS RUM`, y=`80 PROOF VODKA`)) +
+  geom_point() +
+  geom_smooth(method=lm) +  
+  geom_text(x = 1500, y = 40000, 
+                label = lm_eqn(lm(`80 PROOF VODKA`~`PUERTO RICO & VIRGIN ISLANDS RUM`,gr_date_cat.spread[c(4,51)])),
+                parse = TRUE, size = 3)
+
+test3 <- ggplot(data=gr_date_cat.spread[,c(4,60)],aes(x=`STRAIGHT BOURBON WHISKIES`, y=`80 PROOF VODKA`)) +
+  geom_point() +
+  geom_smooth(method=lm) +  
+  geom_text(x = 1500, y = 40000, 
+            label = lm_eqn(lm(`80 PROOF VODKA`~`STRAIGHT BOURBON WHISKIES`,gr_date_cat.spread[c(4,60)])),
+            parse = TRUE, size = 3)
+
+
+test4 <- ggplot(data=gr_date_cat.spread[,c(4,33)],aes(x=`HIGH PROOF BEER`, y=`80 PROOF VODKA`)) +
+  geom_point() +
+  geom_smooth(method=lm, colour="red") +  
+  geom_text(x = 5, y = 15000, 
+            label = lm_eqn(lm(`80 PROOF VODKA`~`HIGH PROOF BEER`,gr_date_cat.spread[c(4,33)])),
+            parse = TRUE, size = 3)
+
+test5 <- ggplot(data=gr_date_cat.spread[,c(4,48)],aes(x=`PEACH BRANDIES`, y=`80 PROOF VODKA`)) +
+  geom_point() +
+  geom_smooth(method=lm, colour="red") +  
+  geom_text(x = 500, y = 10000, 
+            label = lm_eqn(lm(`80 PROOF VODKA`~`PEACH BRANDIES`,gr_date_cat.spread[c(4,48)])),
+            parse = TRUE, size = 3)
+
+test6 <- ggplot(data=gr_date_cat.spread[,c(4,26)],aes(x=`DECANTERS & SPECIALTY PACKAGES`, y=`80 PROOF VODKA`)) +
+  geom_point() +
+  geom_smooth(method=lm, colour="red") +  
+  geom_text(x = 5000, y = 12000, 
+            label = lm_eqn(lm(`80 PROOF VODKA`~`DECANTERS & SPECIALTY PACKAGES`,gr_date_cat.spread[c(4,26)])),
+            parse = TRUE, size = 3)
+
+multiplot(test1, test2, test3, test4, test5, test6, cols=2)
+```
+
+Spiced rum, Puerto Rico rum and straight bourbon whiskies are the highest positive correlations here and one can see a clear linear trend with very high R-squared values. Coincidentally (?) the same three categories are the highest negative correlations. Whilst high proof beer is most definitely an outlier in terms of either data recording or actual frequency of orders, peach brandies and decanters appear probably uncorrelated altogether. To be fair there does appear to be some negative association for peach brandies, but if one looks at the highest negative correlations for all categories, these two appear extremely frequently - so they are genuine outliers in terms of order patterns.
 
 ------
 
 # Final Plots and Summary
 
 ### Plot One
-```{r echo=FALSE, Plot_One, fig.width=12, fig.height=9}
+```{r echo=FALSE, Plot_One, fig.width=12, fig.height=9, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 ggplot(data=gr_date.Jan_May,aes(x=DATE, y=bottles/maxbottles, colour=type)) + 
   geom_point()+ geom_line() +
-                            geom_ribbon(aes(ymin=0, ymax=bottles/maxbottles, fill=type)) +
+  geom_ribbon(aes(ymin=0, ymax=bottles/maxbottles, fill=type)) +
   scale_fill_brewer(palette="Set3")+
   labs(x="Date", y = "Bottles", title = "Time-series of bottle quantities ordered")+
   theme(panel.background = element_rect(fill = 'white'),
-        plot.title = element_text(size = rel(1), colour = "blue"))
+        plot.title = element_text(size = rel(1), colour = "blue")) + geom_vline(xintercept=as.numeric(gr_date.Jan_May[weekdays(gr_date.Jan_May$DATE)=="Tuesday",]$DATE), linetype=4, alpha=0.4)
 ```
 
 ### Description One
@@ -729,12 +1139,11 @@ The plot above shows an overlay of two time-series demonstrating measures of bot
 * The raw time-series of bottle quantities ordered
 * The adjusted time-series, where quantities are divided by zipcode population (per order) 
 
-It is clear that when the quantities were population-adjusted, a clear periodicity is observable.
+It is clear that when the quantities were population-adjusted, a clear periodicaal pattern is observable. Quantities of bottles ordered per citizen always peak on Tuesdays (annotated by the overlay of dashed lines). Monday and Wednesday are pretty much the same; after Wednesday the quantities decline. This pattern does makes sense: Monday is the first day of the week and the stores calculate their weekly requirements by the end of the day. They then submit the order either at end of business or early Tuesday; this allows time for the bottles to be delivered prior to the weekend. They shouldn't need to order too many bottles after the early week's budgeting.
 
-(In order to overlay both time-series on the same plot, they were transformed into percentages by dividing over their sum.)
 
 ### Plot Two
-```{r echo=FALSE, Plot_Two, fig.width=12, fig.height=9}
+```{r echo=FALSE, Plot_Two, fig.width=12, fig.height=9, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 
 #Number of reports per month and num. of participating stores overlay
 ggplot(data=gr_st_month_count, aes(x=month, y=count_reps)) + 
@@ -760,10 +1169,14 @@ This plot shows that it is best to separate the dataset into 2 periods (Jan-May,
 
 ### Plot Three
 
-```{r echo=FALSE, Plot_Three, fig.width=12, fig.height=9}
+```{r echo=FALSE, Plot_Three, fig.width=12, fig.height=9, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 
-ggplot(data=gr_date_cat2.month, aes(x=Month, y=BCAT_NORM, group=1)) +
-  facet_wrap(~ CATEGORY, scales = "free_y") +
+ggplot(data=gr_date_cat2.month) +
+  geom_rect(data=rects, aes(xmin=txmin,xmax=txmax,ymin=tymin,ymax=tymax, 
+                            fill=season), alpha=0.4)+
+  scale_fill_manual(values=colScale)+
+  geom_line(aes(x=month_nom, y=BCAT_NORM, group=1))+
+  facet_wrap(~CATEGORY, scales="free_y")+
   labs(x="Month", y = "Normalised bottle sales", 
        title = "Liquor categories bottle sales with season overlay") + 
   theme(panel.background = element_rect(fill = 'white'),
@@ -772,24 +1185,16 @@ ggplot(data=gr_date_cat2.month, aes(x=Month, y=BCAT_NORM, group=1)) +
         axis.text.y = element_blank(),
         axis.text.x = element_blank(),
         axis.ticks=element_blank(),
-        plot.title = element_text(size = rel(1), colour = "blue")) +
-  geom_rect(data=NULL,aes(xmin="January",xmax="March",ymin=-Inf,ymax=Inf),
-            fill="royalblue1") +
-  geom_rect(data=NULL,aes(xmin="March",xmax="June",ymin=-Inf,ymax=Inf),
-            fill="greenyellow") +
-  geom_rect(data=NULL,aes(xmin="June",xmax="September",ymin=-Inf,ymax=Inf),
-            fill="tomato") +
-  geom_rect(data=NULL,aes(xmin="September",xmax="December",ymin=-Inf,ymax=Inf),
-            fill="violet") +
-  geom_rect(data=NULL,aes(xmin="December",xmax=Inf,ymin=-Inf,ymax=Inf),
-            fill="royalblue1") +
-  geom_line()
-
+        plot.title = element_text(size = rel(1), colour = "blue"))
 ```
 
 ### Description Three
 
 This composite plot shows time series of bottle quantities ordered for all liquor categories in the data; also here the seasons are overlaid in order to aid the visual interpretation of the individual plots. There are many investigations one can partake in with these data, but at an elementary level the liquors can be categorised to "winter" and "summer" drinks.
+
+We can identify that certain liquor types have a demand curve that only peaks in December, for example liqueurs with various flavours like crème de menthe/cacao/etc., brandies and some types of schnapps (cinnamon, butterscotch). Given that these types of liquors have a heavier taste and are generally considered "warming", their demand curve makes sense - we have identified the "winter drinks".
+
+Another clear category of demand patterns is observable for a different set of liquors (tequila, triple sec, flavoured rums, imported vodka), where bottle quantities are positively correlated with expected average temperatures (demand lowest in winter, climbs gradually in spring, peaks between mid-spring/mid-summer, gradually descends in autumn). As opposed to the previous category, these are the "summer drinks".
 
 ------
 
@@ -797,7 +1202,7 @@ This composite plot shows time series of bottle quantities ordered for all liquo
 
 Due to time limitations this project as it was submitted is not thorough, in the sense that most insights are derived from superficial analyses. Most of my observations are intuitive, and I have not succeeded in revealing any hidden patterns within the time-frame (perhaps with the exception of the clear periodicity of the total population-adjusted bottle quantity orders) - I fell into many dead-end analysis attempts.
 
-In general, I think that identifying the auxilliary datasets and merging them to the master took a longer time than I expected and this limited the amount of time I could dedicate to the actual analysis. However, I think that combining the Iowa Liquor Sales data with the auxilliaries has provided a large, granular and rich data set that enables anyone interested to play with the data and see what they find - I am sharing it on [Dropbox](https://www.dropbox.com/s/osdbg8o1j28cp1l/EDA_Udacity_data.zip?dl=0).
+In general, I think that identifying the auxilliary datasets and merging them to the master took a longer time than I expected and this limited the amount of time I could dedicate to the actual analysis. However, I think that combining the Iowa Liquor Sales data with the auxiliaries has provided a large, granular and rich data set that enables anyone interested to play with the data and see what they find - I am sharing it on [Dropbox](https://www.dropbox.com/s/osdbg8o1j28cp1l/EDA_Udacity_data.zip?dl=0).
 
 This project gave me the opportunity to hone my skills in R data wrangling (packages data.table, dplyr are awesome) and data visualisation (ggplot2); not a lot was done in terms of statistical modelling though. I was also happy I got to use the stuff I learnt in a previous Udacity course in scraping tables and request data using API's. Additionally, I started to use git and GitHub - the integration in RStudio is great.
 
