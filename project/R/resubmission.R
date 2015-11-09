@@ -326,3 +326,150 @@ ggplot(data=gr_date_cat2.month) +
         axis.ticks=element_blank(),
         plot.title = element_text(size = rel(1), colour = "blue"))
 
+# Correlation table
+require(lattice)
+require(gdata)
+z <- as.matrix(corr.cat.ts)
+upperTriangle(z, diag=T) <- ""
+levelplot(z,scales=list(x=list(rot=90, abbreviate=TRUE, minlength=8, tck=0.3),
+                        y=list(tck=0.3)),
+          main="Correlation Matrix",col.regions= topo.colors, 
+          cuts=4, at=seq(-1,1,0.4), xlab="", ylab="",
+          colorkey=list(labels=list(at=seq(-0.8,0.8,0.4), 
+                                    labels=c("High Inverse", "Med Inverse", 
+                                             "I\snsignificant", "Med Positive",
+                                             "High Positive"))))
+
+ggplot(melt(z), aes(X1, X2, fill = value)) + geom_tile() + 
+  scale_fill_gradient(low = "blue",  high = "yellow")
+
+#Useful: make palette
+library(colorspace)
+custom <- choose_palette()
+test <- NULL
+ptest <- corr.cat.ts
+ptest[] <- NA
+for (i in 1:69){
+  test <- as.vector(apply(corr.cat.ts[i,], 1, function(x) order(x, decreasing=T)[2:4]))
+  ptest[i,test] <- corr.cat.ts[i,test]
+  test <- as.vector(apply(corr.cat.ts[i,], 1, function(x) order(x, decreasing=F)[2:4]))
+  ptest[i,test] <- corr.cat.ts[i,test]
+}
+
+# Create new data frame based on gr_date_cat2
+gr_date_cat2.month_v3 <- gr_date_cat2.month
+gr_date_cat2.month_v3 <- mutate(gr_date_cat2.month_v3, 
+       season=ifelse(Month %in% c("January", "February", "December"), "2.winter", 
+                     ifelse(Month %in% c("March", "April", "May"), "3.spring",
+                            ifelse(Month %in% c("June", "July", "August"), "1.summer",
+                                   "4.autumn"))))
+
+gr_date_cat2.month_v3 <- ddply(gr_date_cat2.month_v3, .(CATEGORY,season), summarise, 
+      BOTTLES=sum(BOTTLES, na.rm=T))
+
+gr_date_cat2.month_v3.temp <- ddply(gr_date_cat2.month_v3, .(CATEGORY), summarise, 
+                               BOTTLES_SUM=sum(BOTTLES, na.rm=T))
+
+gr_date_cat2.month_v3 <- left_join(gr_date_cat2.month_v3,
+                                   gr_date_cat2.month_v3.temp, by="CATEGORY")
+rm(gr_date_cat2.month_v3.temp)
+
+
+# At this stage our df
+gr_date_cat2.month_v3 <- mutate(gr_date_cat2.month_v3, 
+                                BOTTLES_PROP=BOTTLES/BOTTLES_SUM)
+
+#gr_date_cat2.month_v2 <- mutate(gr_date_cat2.month_v2, 
+#                                season_type=ifelse(season %in% c("3.spring", "1.summer"),
+#                                                   "warm", "cold"))
+
+#ggplot(data=gr_date_cat2.month_v2, aes(x=CATEGORY, y=BOTTLES_PROP,
+#                                       fill=season)) + 
+#  geom_bar(stat="identity", position = "stack")
+
+#ggplot(data=gr_date_cat2.month_v2, aes(x=1, y=BOTTLES_PROP, fill=season)) + 
+#  geom_bar(stat="identity",width=1) +
+#  facet_wrap(~CATEGORY)+coord_polar(theta="y") +
+#  scale_fill_brewer(palette = "Set1") +
+#  theme(axis.text = element_blank(),
+#        axis.ticks = element_blank(),
+#        panel.grid  = element_blank(),
+#        panel.background = element_blank(),
+#        strip.background = element_rect(fill="white"))
+
+
+#ggplot(data=gr_date_cat2.month_v2, aes(x=1, y=BOTTLES_PROP, fill=season_type)) + 
+#  geom_bar(stat="identity", position=position_dodge(width=1)) +
+#  facet_wrap(~CATEGORY)
+
+
+#Categorising to broader categories
+categories <- unique(gr_date_cat2.month_v3[,1])
+Vodkas <- categories[c(1,2,28,37,36,40,45)]
+Misc <-  categories[c(3,5,24,25,31,51, 65)]
+Liqueurs <-  categories[c(4,9,20,21,22,23,30,32,41,42,63,67,68,69)]
+Gins <-  categories[c(6,8,26,33)]
+Brandies <-  categories[c(7,11,13,18, 34,43,46)]
+Whiskies <-  categories[c(12,14,15,17,38,53,54,55,58,59,61)]
+Schnapps <-  categories[c(10,16,19,29,35,44,47,48,50,52,56,60,64,66)]
+Rums <- categories[c(27,39,49,57)]
+Tequila <- categories[62]
+
+gr_date_cat2.month_v3 <- mutate(gr_date_cat2.month_v3, 
+                                broad_cat=ifelse(CATEGORY %in% Vodkas, "Vodkas",
+                                                 ifelse(CATEGORY %in% Misc, "Misc",
+                                                        ifelse(CATEGORY %in% Liqueurs, "Liqueurs",
+                                                               ifelse(CATEGORY %in% Gins, "Gins",
+                                                                      ifelse(CATEGORY %in% Brandies, "Brandies",
+                                                                             ifelse(CATEGORY %in% Whiskies, "Whiskies",
+                                                                                    ifelse(CATEGORY %in% Schnapps, "Schnapps", 
+                                                                                           ifelse(CATEGORY %in% Rums, "Rums", "Tequila")))))))))
+
+
+gr_date_cat2.month_v4 <- ddply(gr_date_cat2.month_v3, .(broad_cat, season), summarise, 
+                               BOTTLES=sum(BOTTLES, na.rm=T))
+
+ggplot(data=gr_date_cat2.month_v4, aes(x=season, y=BOTTLES, group=broad_cat, colour=broad_cat)) +
+  geom_line()  +  scale_x_discrete(limits=c("2.winter", "3.spring", "1.summer", "4.autumn"))
+
+gr_date_cat2.month_v4.temp <- ddply(gr_date_cat2.month_v4, .(broad_cat), summarise, 
+                                    BOTTLES_SUM=sum(BOTTLES, na.rm=T))
+
+gr_date_cat2.month_v4 <- left_join(gr_date_cat2.month_v4,
+                                   gr_date_cat2.month_v4.temp, by="broad_cat")
+
+rm(gr_date_cat2.month_v4.temp)
+
+
+gr_date_cat2.month_v4.temp <- ddply(gr_date_cat2.month_v4, .(season), summarise, 
+                                    BOTTLES_SUM=sum(BOTTLES, na.rm=T))
+
+gr_date_cat2.month_v4 <- mutate(gr_date_cat2.month_v4, 
+                                BOTTLES_PROP=BOTTLES/BOTTLES_SUM)
+
+gr_date_cat2.month_v4.temp$BOTTLES_PROP_ADJ <- gr_date_cat2.month_v4.temp$BOTTLES_SUM/sum(gr_date_cat2.month_v4.temp$BOTTLES_SUM)
+
+gr_date_cat2.month_v4 <- left_join(gr_date_cat2.month_v4,
+                                   gr_date_cat2.month_v4.temp, by="season")
+
+gr_date_cat2.month_v4$BOTTLES_ADJ <- gr_date_cat2.month_v4$BOTTLES_PROP/gr_date_cat2.month_v4$BOTTLES_PROP_ADJ
+
+gr_date_cat2.month_v4 <- rename(gr_date_cat2.month_v4, Type=broad_cat)
+
+test <- mutate(gr_date_cat2.month_v4, 
+               Seasonal_Profile=ifelse(Type %in% c("Vodkas", "Tequila", "Gins", "Rums"),
+                              "Warm", "Cold"))
+ggplot(data=gr_date_cat2.month_v4, aes(x=season, y=BOTTLES_ADJ,  group=Type, colour=Type)) +
+  geom_line(linetype=2, size=1) +  geom_point(size=3) + scale_x_discrete(limits=c("2.winter", "3.spring", "1.summer", "4.autumn"))+
+  facet_wrap(~Type, scales="free_y") + labs(x="Season", y="Seasonally adjusted bottle sales ratio")
+
+colScale <- c(col2hcl("blue"), col2hcl("green"), col2hcl("red"), col2hcl("purple"), col2hcl("blue"))
+colScale2 <- c(col2hcl("blue"), col2hcl("red"))
+ggplot(data=gr_date_cat2.month_v4, aes(x=season, y=BOTTLES_ADJ,  group=Type, colour=Seasonal_Profile)) +
+  geom_rect(data=rects, aes(xmin=txmin,xmax=txmax,ymin=tymin,ymax=tymax, 
+                            fill=season), alpha=0.4)+
+  scale_fill_manual(values=colScale)+
+  geom_line(linetype=2, size=1) +  geom_point(size=3) + scale_x_discrete(limits=c("2.winter", "3.spring", "1.summer", "4.autumn"))+
+  facet_wrap(~Type, scales="free_y") + labs(x="Season", y="Seasonally adjusted bottle sales ratio")+
+  scale_color_manual(values=colScale2)
+
