@@ -26,7 +26,7 @@ library(lubridate)
 library(scales)
 library(lattice)
 library(gdata)
-opts_chunk$set(fig.width=9, message = FALSE, warnings = FALSE)
+opts_chunk$set(echo=FALSE, fig.width=9, message = FALSE, warnings = FALSE)
 ```
 # Introduction
 Welcome to my Exploratory Data Analysis project for Udacity’s Data Analyst Nanodegree.
@@ -65,6 +65,9 @@ load("/Users/alexspanos/Documents//Nanodegree/EDA/project/project.RData")
 
 # Data
 ## Loading
+
+Please see relevant scripts * [here](https://github.com/alejio/Udacity-EDA-draft).
+
 ```{r eval=FALSE, code = readLines('/Users/alexspanos/Documents//Nanodegree/EDA/project/R/data_load_main.R')}
 ```
 
@@ -78,10 +81,12 @@ load("/Users/alexspanos/Documents//Nanodegree/EDA/project/project.RData")
 ### Initial univariate exploration
 
 The variables in the dataset are listed below:
+
 ```{r echo=FALSE, Dataset_Features1}
 # Variables in master data set are listed below:
 colnames(data1)
 ```
+
 Columns from the original liquor sales data are 1-18; others come from the
 auxiliary sources.
 
@@ -252,7 +257,8 @@ It is not really clear what's going on so I am going to log-transform the x-axis
 # Adjust them so we see more things
 multiplot(quick_hist(14, 2) + coord_cartesian(xlim=c(0, 50)), 
           quick_hist(15, 50) + coord_cartesian(xlim=c(0, 2000)), 
-          quick_hist(16,0.1) + scale_x_log10(), quick_hist(17, 0.1) + scale_x_log10(), 
+          quick_hist(16,0.1) + scale_x_log10(), 
+          quick_hist(17, 0.1) + scale_x_log10(), 
           quick_hist(18,2) + coord_cartesian(c(0,100)),
           quick_hist(19, 0.1) + scale_x_log10(), cols=3)
 ```
@@ -311,7 +317,8 @@ The dataset contains 69 different categories, so it will be hard to visualise al
 
 ```{r eval=FALSE, gr_cat}
 gr_cat <- ddply(data1, .(`CATEGORY NAME`), summarise,
-                           bottles=sum(`BOTTLE QTY`, na.rm=T), price=mean(`BTL PRICE`))
+                           bottles=sum(`BOTTLE QTY`, na.rm=T), 
+                price=mean(`BTL PRICE`))
 ```
 
 ```{r echo=FALSE, gr_cat_show}
@@ -365,7 +372,8 @@ gr_zip_pop$ZIPCODE <- factor(gr_zip$ZIPCODE, ordered=F)
 ggpairs(gr_zip_pop, columns=c(8,9,10,14,4,5,22),
                  upper = "blank", lower=list(params=list(size=1)),
                  params = c(Shape = I("."), outlier.shape = I(".")), 
-                 title="Scatter plots between national heritage group proportions") + 
+                 title="Scatter plots between national heritage 
+        group proportions") + 
   theme(legend.position = "none",
         panel.grid.major = element_blank(),
         axis.ticks = element_blank(),
@@ -404,7 +412,7 @@ I spent some time trying some variable groupings with *ddply* in order to find s
 
 In the following plots we will perform a high-level analysis of basic demographics.
 
-Firstly let's look at population per zipcode, so we need to group accordingly (we'll use the gr_zip_pop variable we defined earlier on).
+Firstly let's look at population per zipcode, so we need to group accordingly.
 
 ```{r eval=FALSE, map_plot_prep}
 
@@ -515,7 +523,8 @@ In the composite plot below I am producing something like a heat map for populat
 
 #Produce maps with overlays for all nationalities
 
-suppressWarnings(multiplot(plot_map_nat_over(3), plot_map_nat_over(6), plot_map_nat_over(7), 
+suppressWarnings(multiplot(plot_map_nat_over(3), plot_map_nat_over(6), 
+                           plot_map_nat_over(7), 
           plot_map_nat_over(8), plot_map_nat_over(9), plot_map_nat_over(10),
           plot_map_nat_over(11), plot_map_nat_over(12), plot_map_nat_over(13),
           plot_map_nat_over(14), plot_map_nat_over(15), plot_map_nat_over(16),
@@ -555,7 +564,6 @@ OK now let's move on to liquor sales.
 ### Auditing data
 Let's audit the liquor sales data a little bit first just to make sure it is trustworthy.
 
-Firstly some data prep:
 
 ```{r eval=FALSE, audit1}
 #Make DF summarising reports for each store each month
@@ -582,7 +590,8 @@ And on to a box plot which illustrates the monthly distribution of the number of
 #Number of reports per month and num. of participating stores overlay
 ggplot(data=gr_st_month_count, aes(x=month, y=count_reps)) + 
   stat_boxplot(geom='errorbar') + geom_jitter(alpha=0.2) + 
-  geom_boxplot(aes(fill=part_stores), outlier.size=0) +
+  geom_boxplot(aes(fill=part_stores), outlier.size=0, alpha=0.6) +
+  scale_fill_gradientn("# of \n participating \n stores", colours=topo.colors(10))+
   coord_cartesian(ylim = c(0, 1000)) +
   theme(panel.background = element_rect(fill = 'white'),
         panel.grid.major = element_blank(),
@@ -601,9 +610,11 @@ gr_st_week_count <- ddply(data1, .(format(DATE, "%U"), STORE), summarise,
                              count_reps=length(STORE))
 setnames(gr_st_week_count,1, "week")
 gr_st_week_count$week <- as.numeric(gr_st_week_count$week)
-gr_st_week.part_stores <- data.frame("week"=rownames(table(gr_st_week_count$week)),
+gr_st_week.part_stores <- data.frame("week"=
+                                       rownames(table(gr_st_week_count$week)),
   "part_stores"=as.numeric(table(gr_st_week_count$week)))
-gr_st_week.part_stores$week <- as.numeric(as.character(gr_st_week.part_stores$week))
+gr_st_week.part_stores$week <- 
+  as.numeric(as.character(gr_st_week.part_stores$week))
 gr_st_week_count <- left_join(gr_st_week_count, gr_st_week.part_stores)
 #changed my mind. will make week factor
 gr_st_week_count$week <- factor(gr_st_week_count$week)
@@ -615,7 +626,8 @@ rm(gr_st_week.part_stores)
 #Plot: same as plot 1 but using boxplot colour as part. stores variable
 ggplot(data=gr_st_week_count, aes(x=week, y=count_reps)) + 
   stat_boxplot(geom='errorbar') + geom_jitter(alpha=0.2) + 
-  geom_boxplot(aes(fill=part_stores), outlier.size=0) +
+  geom_boxplot(aes(fill=part_stores), outlier.size=0, alpha=0.6) +
+  scale_fill_gradientn("# of \n participating \n stores", colours=topo.colors(10))+
   coord_cartesian(ylim = c(0, 250)) +
   theme(panel.background = element_rect(fill = 'white'),
         panel.grid.major = element_blank(),
@@ -634,7 +646,8 @@ gr_st_day_count <- ddply(filter(data1, (DATE <= "2014-06-08") &
                          summarise, count_reps=length(STORE))
 setnames(gr_st_day_count,1, "day")
 gr_st_day.part_stores <- data.frame("day"=rownames(table(gr_st_day_count$day)),
-                                     "part_stores"=as.numeric(table(gr_st_day_count$day)))
+                                     "part_stores"=
+                                      as.numeric(table(gr_st_day_count$day)))
 gr_st_day.part_stores$day <- as.Date(as.character(gr_st_day.part_stores$day))
 gr_st_day_count <- left_join(gr_st_day_count, gr_st_day.part_stores)
 rm(gr_st_day.part_stores)
@@ -643,7 +656,8 @@ rm(gr_st_day.part_stores)
 ```{r echo=FALSE, auditplot3, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 ggplot(data=gr_st_day_count, aes(x=as.character(day), y=count_reps)) + 
   stat_boxplot(geom='errorbar') + geom_jitter(alpha=0.2) + 
-  geom_boxplot(aes(fill=part_stores), outlier.size=0) +
+  geom_boxplot(aes(fill=part_stores), outlier.size=0, alpha=0.6) +
+  scale_fill_gradientn("# of \n participating \n stores", colours=topo.colors(10))+
   coord_cartesian(ylim = c(0, 250)) +
   theme(panel.background = element_rect(fill = 'white'),
         panel.grid.major = element_blank(),
@@ -673,10 +687,14 @@ gr_st_weekday_count <- ddply(data1, .(weekdays(DATE), STORE), summarise,
 setnames(gr_st_weekday_count,1, "weekday")
 day.name <- c("Monday", "Tuesday", "Wednesday", "Thursday", 
               "Friday", "Saturday", "Sunday")
-gr_st_weekday_count$weekday <- factor(gr_st_weekday_count$weekday, levels=day.name)
-gr_st_weekday.part_stores <- data.frame("weekday"=rownames(table(gr_st_weekday_count$weekday)),
-                                    "part_stores"=as.numeric(table(gr_st_weekday_count$weekday)))
-gr_st_weekday.part_stores$weekday <- factor(gr_st_weekday.part_stores$weekday, levels=day.name)
+gr_st_weekday_count$weekday <- factor(gr_st_weekday_count$weekday, 
+                                      levels=day.name)
+gr_st_weekday.part_stores <- 
+  data.frame("weekday"=rownames(table(gr_st_weekday_count$weekday)),
+                                    "part_stores"=as.numeric(
+                                      table(gr_st_weekday_count$weekday)))
+gr_st_weekday.part_stores$weekday <- factor(gr_st_weekday.part_stores$weekday,
+                                            levels=day.name)
 gr_st_weekday_count <- left_join(gr_st_weekday_count, gr_st_weekday.part_stores)
 rm(gr_st_weekday.part_stores)
 ```
@@ -686,7 +704,8 @@ rm(gr_st_weekday.part_stores)
 #Plot data
 ggplot(data=gr_st_weekday_count, aes(x=weekday, y=count_reps)) + 
   stat_boxplot(geom='errorbar') + geom_jitter(alpha=0.2) + 
-  geom_boxplot(aes(fill=part_stores), outlier.size=0) +
+  geom_boxplot(aes(fill=part_stores), outlier.size=0, alpha=0.6) +
+  scale_fill_gradientn("# of \n participating \n stores", colours=topo.colors(10))+
   coord_cartesian(ylim = c(0, 4500)) +
   theme(panel.background = element_rect(fill = 'white'),
         panel.grid.major = element_blank(),
@@ -720,19 +739,18 @@ ggplot(data=data1, aes(x=`BOTTLE QTY`)) +
         plot.title = element_text(size = rel(1), colour = "blue"))
 ```
 
-Not easy to see shape of distribution. Looking at log-transform.
+Not easy to see shape of distribution. Looking at log-transform (x-axis values removed as they are log-transformed).
 
 ```{r echo=FALSE, Liqplots2, cache=TRUE, cache.path='cache/', fig.path='figure/'}
-bks <- seq(min(data1$`BOTTLE QTY`, na.rm=T), max(data1$`BOTTLE QTY`, na.rm=T))
 ggplot(data=data1, aes(x=`BOTTLE QTY`)) +
   geom_histogram(aes(y =..density..),
                  fill=I("blue"), col=I("black"), alpha=0.5, origin = -0.5) +
-  labs(title="Histogram for Log Bottle Quantities", x="Bottles", y="Count") +
-  scale_x_log10(breaks=bks, labels=NULL) +
+  labs(title="Histogram for Log Bottle Quantities", x="Log Bottles", 
+       y="Count") +
+  scale_x_log10(breaks=c(1, 5, 10, 25, 50, 100, 150, 250, 400)) +
   theme(panel.background = element_rect(fill = 'white'),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(), 
-        axis.ticks=element_blank(),
         plot.title = element_text(size = rel(1), colour = "blue"))
 ```
 
@@ -762,7 +780,7 @@ gr_date.Jan_May <- ddply(filter(data1, (DATE < "2014-06-01")),
                      BOTTLES_NORM = sum(`BOTTLE QTY`/POPULATION, na.rm=T))
 ```
 
-The above data frame contains three variables: date, total bottles sold and *normalised bottles sold*. The latter variable is an attempt to adjust for the population bias. This effect arises because we aggregate data from variably populated areas in Iowa and can potentially obscure meaningful relationships in the analysis of the data. The following code rearranges the data frame a bit to help out ggplot2.
+The created data frame contains three variables: date, total bottles sold and *normalised bottles sold*. The latter variable is an attempt to adjust for the population bias. This effect arises because we aggregate data from variably populated areas in Iowa and can potentially obscure meaningful relationships in the analysis of the data. 
 
 ```{r eval=FALSE, gr_date.Jan_May2}
 
@@ -780,7 +798,8 @@ And the plot follows..
 ```{r echo=FALSE, Liqplots4, fig.width=12, fig.height=9, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 ggplot(data=gr_date.Jan_May,aes(x=DATE, y=bottles/maxbottles, colour=type)) + 
   geom_point()+ geom_line() +
-                            geom_ribbon(aes(ymin=0, ymax=bottles/maxbottles, fill=type)) +
+                            geom_ribbon(aes(ymin=0, ymax=bottles/maxbottles, 
+                                            fill=type)) +
   scale_fill_brewer(palette="Set3")+
   labs(x="Date", y = "Bottles")+
   theme(panel.background = element_rect(fill = 'white'),
@@ -817,11 +836,14 @@ One last note on the previous weekday analysis. Let's plot the raw and populatio
 
 
 ```{r echo=FALSE, Liqplots6, cache=TRUE, cache.path='cache/', fig.path='figure/'}
-ggplot(data=gr_date.Jan_May,aes(x=bottles[type=="BOTTLES"]/maxbottles[type=="BOTTLES"], 
-                                y=bottles[type=="BOTTLES_NORM"]/maxbottles[type=="BOTTLES_NORM"],
+ggplot(data=gr_date.Jan_May,aes(x=bottles[type=="BOTTLES"]/
+                                  maxbottles[type=="BOTTLES"], 
+                                y=bottles[type=="BOTTLES_NORM"]/
+                                  maxbottles[type=="BOTTLES_NORM"],
                                 shape=weekdays(DATE[type=="BOTTLES"]),
                                 colour=weekdays(DATE[type=="BOTTLES"]))) +
-  geom_point(size=3) + labs(x="raw quantities", y="population adjusted quantities")
+  geom_point(size=3) + 
+  labs(x="raw quantities", y="population adjusted quantities")
 ```
 
 I like this plot because it looks like a machine learning exercise.. We see here that each day forms an (almost) discrete cluster, with Tuesdays and Fridays having maximum separation from the main body of observations; however Fridays would belong to a high R-squared fitter regression line of all observations excluding Tuesdays. So I think the real outlier here is Tuesdays, in the sense that the normalisation added high information value for that weekday.
@@ -868,7 +890,8 @@ lm_eqn = function(m) {
 }
 #Plot
 ggplot(data=gr_item, aes(x=price, y=bottles)) + geom_point(alpha=0.3) +
-  scale_y_log10() + scale_x_log10(limits=c(5,250))+ geom_smooth(method="lm",fill="red") +
+  scale_y_log10() + scale_x_log10(limits=c(5,250))+ geom_smooth(method="lm",
+                                                                fill="red") +
   geom_text(x = log10(150), y = log10(1e+05), 
             label = lm_eqn(lm(log10(bottles)~log10(price),gr_item)),
             parse = TRUE)
@@ -883,7 +906,8 @@ In this small section I would like to look at order quantities as time series (n
 ```{r eval=FALSE, gr_date_cat2}
 gr_date_cat2 <- ddply(data1, .(DATE, `CATEGORY NAME`), summarise, 
                       BOTTLES = sum(`BOTTLE QTY`, na.rm=T))
-gr_date_cat2.month <- ddply(gr_date_cat2, .(factor(months(DATE), levels=month.name),
+gr_date_cat2.month <- ddply(gr_date_cat2, .(factor(months(DATE), 
+                                                   levels=month.name),
                                     `CATEGORY NAME`), summarise,
                             BOTTLES = sum(`BOTTLES`, na.rm=T))
 setnames(gr_date_cat2.month, 1, "Month")
@@ -891,7 +915,8 @@ gr_date_cat3 <- ddply(gr_date_cat2.month, .(Month), summarise,
                       TOT_BOTT = sum(BOTTLES, na.rm=T))
 
 gr_date_cat2.month <- left_join(gr_date_cat2.month, gr_date_cat3)
-gr_date_cat2.month$BCAT_NORM <- gr_date_cat2.month$BOTTLES/gr_date_cat2.month$TOT_BOTT
+gr_date_cat2.month$BCAT_NORM <-
+  gr_date_cat2.month$BOTTLES/gr_date_cat2.month$TOT_BOTT
 setnames(gr_date_cat2.month, 2, "CATEGORY")
 
 # Some necessary manipulation for ggplot2 intricacies
@@ -901,7 +926,20 @@ dec_dates <- decimal_date(as.Date(c("2014-01-01", "2014-02-01", "2014-03-01",
                                     "2014-10-01", "2014-11-01", "2014-12-01")))
 
 gr_date_cat2.month <- mutate(
-  gr_date_cat2.month, month_nom = ifelse(Month=="January", dec_dates[1], ifelse(Month=="February", dec_dates[2], ifelse(Month=="March", dec_dates[3], ifelse(Month=="April", dec_dates[4], ifelse(Month=="May", dec_dates[5], ifelse(Month=="June", dec_dates[6], ifelse(Month=="July", dec_dates[7], ifelse(Month=="August", dec_dates[8], ifelse(Month=="September", dec_dates[9], ifelse(Month=="October", dec_dates[10], ifelse(Month=="November", dec_dates[11], ifelse(Month=="December", dec_dates[12], 0)))))))))))))
+  gr_date_cat2.month, 
+  month_nom = 
+    ifelse(Month=="January", dec_dates[1], 
+     ifelse(Month=="February", dec_dates[2], 
+      ifelse(Month=="March", dec_dates[3], 
+       ifelse(Month=="April", dec_dates[4], 
+        ifelse(Month=="May", dec_dates[5], 
+         ifelse(Month=="June", dec_dates[6], 
+          ifelse(Month=="July",  dec_dates[7],
+           ifelse(Month=="August",dec_dates[8], 
+            ifelse(Month=="September", dec_dates[9], 
+             ifelse(Month=="October", dec_dates[10], 
+              ifelse(Month=="November", dec_dates[11], 
+               ifelse(Month=="December", dec_dates[12], 0)))))))))))))
 gr_date_cat2.month[gr_date_cat2.month$CATEGORY=="",]$CATEGORY <- "UNKNOWN"
 ```
 
@@ -909,14 +947,17 @@ In the subsequent plots I show time series of normalised bottle quantities of or
 
 ```{r echo=FALSE, Liqplots9, fig.width=12, fig.height=9, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 # Settings for ggplot2
-txmin <- decimal_date(as.Date(c("2014-01-01", "2014-03-01", "2014-06-01","2014-09-01", "2014-12-01")))
-txmax <- c(decimal_date(as.Date(c("2014-03-01", "2014-06-01", "2014-09-01","2014-12-01"))), Inf)
+txmin <- decimal_date(as.Date(c("2014-01-01", "2014-03-01", "2014-06-01",
+                                "2014-09-01", "2014-12-01")))
+txmax <- c(decimal_date(as.Date(c("2014-03-01", "2014-06-01", "2014-09-01",
+                                  "2014-12-01"))), Inf)
 tymin <- rep(-Inf, 5)
 tymax <- rep(Inf, 5)
 season= c("1.winter", "2.spring","3.summer","4.autumn","1.winter")
 rects <- data.frame(txmin,txmax,tymin,tymax,season)
 rects[,5] <- sapply(rects[,5], as.character)
-colScale <- c(col2hcl("blue"), col2hcl("green"), col2hcl("red"), col2hcl("purple"), col2hcl("blue"))
+colScale <- c(col2hcl("blue"), col2hcl("green"), col2hcl("red"), 
+              col2hcl("purple"), col2hcl("blue"))
 
 
 #Plotting
@@ -955,16 +996,18 @@ So after manually categorising the various liquor categories to 9 liquor types (
 # Create new data frame based on gr_date_cat2
 gr_date_cat2.month_v3 <- gr_date_cat2.month
 gr_date_cat2.month_v3 <- mutate(gr_date_cat2.month_v3, 
-       season=ifelse(Month %in% c("January", "February", "December"), "2.winter", 
+       season=ifelse(Month %in% c("January", "February", "December"), 
+                     "2.winter", 
                      ifelse(Month %in% c("March", "April", "May"), "3.spring",
-                            ifelse(Month %in% c("June", "July", "August"), "1.summer",
-                                   "4.autumn"))))
+                            ifelse(Month %in% c("June", "July", "August"), 
+                                   "1.summer", "4.autumn"))))
 
-gr_date_cat2.month_v3 <- ddply(gr_date_cat2.month_v3, .(CATEGORY,season), summarise, 
-      BOTTLES=sum(BOTTLES, na.rm=T))
+gr_date_cat2.month_v3 <- ddply(gr_date_cat2.month_v3, .(CATEGORY,season), 
+                               summarise, BOTTLES=sum(BOTTLES, na.rm=T))
 
-gr_date_cat2.month_v3.temp <- ddply(gr_date_cat2.month_v3, .(CATEGORY), summarise, 
-                               BOTTLES_SUM=sum(BOTTLES, na.rm=T))
+gr_date_cat2.month_v3.temp <- ddply(gr_date_cat2.month_v3, .(CATEGORY), 
+                                    summarise, 
+                                    BOTTLES_SUM=sum(BOTTLES, na.rm=T))
 
 gr_date_cat2.month_v3 <- left_join(gr_date_cat2.month_v3,
                                    gr_date_cat2.month_v3.temp, by="CATEGORY")
@@ -988,21 +1031,24 @@ Schnapps <-  categories[c(10,16,19,29,35,44,47,48,50,52,56,60,64,66)]
 Rums <- categories[c(27,39,49,57)]
 Tequila <- categories[62]
 
-gr_date_cat2.month_v3 <- mutate(gr_date_cat2.month_v3, 
-                                broad_cat=ifelse(CATEGORY %in% Vodkas, "Vodkas",
-                                                 ifelse(CATEGORY %in% Misc, "Misc",
-                                                        ifelse(CATEGORY %in% Liqueurs, "Liqueurs",
-                                                               ifelse(CATEGORY %in% Gins, "Gins",
-                                                                      ifelse(CATEGORY %in% Brandies, "Brandies",
-                                                                             ifelse(CATEGORY %in% Whiskies, "Whiskies",
-                                                                                    ifelse(CATEGORY %in% Schnapps, "Schnapps", 
-                                                                                           ifelse(CATEGORY %in% Rums, "Rums", "Tequila")))))))))
+gr_date_cat2.month_v3 <- 
+  mutate(gr_date_cat2.month_v3, 
+   broad_cat=ifelse(CATEGORY %in% Vodkas, "Vodkas",
+      ifelse(CATEGORY %in% Misc, "Misc",
+        ifelse(CATEGORY %in% Liqueurs, "Liqueurs",
+          ifelse(CATEGORY %in% Gins, "Gins",
+             ifelse(CATEGORY %in% Brandies, "Brandies",
+                ifelse(CATEGORY %in% Whiskies, "Whiskies",
+                   ifelse(CATEGORY %in% Schnapps, "Schnapps", 
+                      ifelse(CATEGORY %in% Rums, "Rums", "Tequila")))))))))
 
 
-gr_date_cat2.month_v4 <- ddply(gr_date_cat2.month_v3, .(broad_cat, season), summarise, 
+gr_date_cat2.month_v4 <- ddply(gr_date_cat2.month_v3, .(broad_cat, season), 
+                               summarise, 
                                BOTTLES=sum(BOTTLES, na.rm=T))
 
-gr_date_cat2.month_v4.temp <- ddply(gr_date_cat2.month_v4, .(broad_cat), summarise, 
+gr_date_cat2.month_v4.temp <- ddply(gr_date_cat2.month_v4, .(broad_cat), 
+                                    summarise, 
                                     BOTTLES_SUM=sum(BOTTLES, na.rm=T))
 
 gr_date_cat2.month_v4 <- left_join(gr_date_cat2.month_v4,
@@ -1011,29 +1057,34 @@ gr_date_cat2.month_v4 <- left_join(gr_date_cat2.month_v4,
 rm(gr_date_cat2.month_v4.temp)
 
 
-gr_date_cat2.month_v4.temp <- ddply(gr_date_cat2.month_v4, .(season), summarise, 
+gr_date_cat2.month_v4.temp <- ddply(gr_date_cat2.month_v4, .(season),
+                                    summarise, 
                                     BOTTLES_SUM=sum(BOTTLES, na.rm=T))
 
 gr_date_cat2.month_v4 <- mutate(gr_date_cat2.month_v4, 
                                 BOTTLES_PROP=BOTTLES/BOTTLES_SUM)
 
-gr_date_cat2.month_v4.temp$BOTTLES_PROP_ADJ <- gr_date_cat2.month_v4.temp$BOTTLES_SUM/sum(gr_date_cat2.month_v4.temp$BOTTLES_SUM)
+gr_date_cat2.month_v4.temp$BOTTLES_PROP_ADJ <- 
+  gr_date_cat2.month_v4.temp$BOTTLES_SUM/
+  sum(gr_date_cat2.month_v4.temp$BOTTLES_SUM)
 
 gr_date_cat2.month_v4 <- left_join(gr_date_cat2.month_v4,
                                    gr_date_cat2.month_v4.temp, by="season")
 
 gr_date_cat2.month_v4$BOTTLES_ADJ <- gr_date_cat2.month_v4$BOTTLES_PROP/gr_date_cat2.month_v4$BOTTLES_PROP_ADJ
 gr_date_cat2.month_v4 <- rename(gr_date_cat2.month_v4, Type=broad_cat)
-gr_date_cat2.month_v4 <- mutate(gr_date_cat2.month_v4, 
-               Seasonal_Profile=ifelse(Type %in% c("Vodkas", "Tequila", "Gins", "Rums"),
-                              "Warm", "Cold"))
+gr_date_cat2.month_v4 <- 
+  mutate(gr_date_cat2.month_v4, 
+     Seasonal_Profile=ifelse(Type %in% c("Vodkas", "Tequila", "Gins", "Rums"), 
+                             "Warm", "Cold"))
 ```
 
 
 ```{r echo=FALSE, Liqplots10, fig.width=12, fig.height=9, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 colScale2 <- c(col2hcl("blue"), col2hcl("red"))
 ggplot(data=gr_date_cat2.month_v4, aes(x=season, y=BOTTLES_ADJ,  group=Type, colour=Seasonal_Profile)) +
-  geom_line(linetype=2, size=1) +  geom_point(size=3) + scale_x_discrete(limits=c("2.winter", "3.spring", "1.summer", "4.autumn"))+
+  geom_line(linetype=2, size=1) +  geom_point(size=3) + 
+  scale_x_discrete(limits=c("2.winter", "3.spring", "1.summer", "4.autumn"))+
   facet_wrap(~Type, scales="free_y") + 
   labs(x="Season", y="Seasonally adjusted bottle sales ratio",
        title = "Seasonal profile of main liquor categories")+
@@ -1082,10 +1133,12 @@ ind.corr2 <- NULL
 z <- corr.cat.ts
 z[] <- NA
 for (i in 1:69){
-  ind.corr1 <- as.vector(apply(corr.cat.ts[i,], 1, function(x) order(x, decreasing=T)[2]))
+  ind.corr1 <- as.vector(apply(corr.cat.ts[i,], 1, 
+                               function(x) order(x, decreasing=T)[2]))
   #print(ind.corr)
   z[i,ind.corr1] <- c(1)
-  ind.corr2 <- as.vector(apply(corr.cat.ts[i,], 1, function(x) order(x, decreasing=F)[2]))
+  ind.corr2 <- as.vector(apply(corr.cat.ts[i,], 1, 
+                               function(x) order(x, decreasing=F)[2]))
   #print(ind.corr)
   z[i,ind.corr2] <- c(-1)
 }
@@ -1108,43 +1161,53 @@ It would be useful to plot tequila against its highest positively and negatively
 ```{r echo=FALSE, TEQcorrs, fig.width=12, fig.height=9, warning=FALSE, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 #Produce plots
 
-test1 <- ggplot(data=gr_date_cat.spread[,c(64,44)],aes(x=`MISC. IMPORTED CORDIALS & LIQUEURS`, y=TEQUILA)) +
+test1 <- ggplot(data=gr_date_cat.spread[,c(64,44)],
+                aes(x=`MISC. IMPORTED CORDIALS & LIQUEURS`, y=TEQUILA)) +
   geom_point() +
   geom_smooth(method=lm) +  
   geom_text(x = 1500, y = 10000, 
             label = lm_eqn(lm(TEQUILA~`MISC. IMPORTED CORDIALS & LIQUEURS`,gr_date_cat.spread[c(64,44)])),
             parse = TRUE, size = 3)
 
-test2 <- ggplot(data=gr_date_cat.spread[,c(64,65)],aes(x=`TRIPLE SEC`, y=TEQUILA)) +
+test2 <- ggplot(data=gr_date_cat.spread[,c(64,65)],
+                aes(x=`TRIPLE SEC`, y=TEQUILA)) +
   geom_point() +
   geom_smooth(method=lm) +  
   geom_text(x = 1500, y = 10000, 
-                label = lm_eqn(lm(TEQUILA~`TRIPLE SEC`,gr_date_cat.spread[c(64,65)])),
+                label = lm_eqn(lm(TEQUILA~`TRIPLE SEC`,
+                                  gr_date_cat.spread[c(64,65)])),
                 parse = TRUE, size = 3)
 
-test3 <- ggplot(data=gr_date_cat.spread[,c(64,39)],aes(x=`IMPORTED VODKA - MISC`, y=TEQUILA)) +
+test3 <- ggplot(data=gr_date_cat.spread[,c(64,39)],
+                aes(x=`IMPORTED VODKA - MISC`, y=TEQUILA)) +
   geom_point() +
   geom_smooth(method=lm) +  
   geom_text(x = 1500, y = 10000, 
-            label = lm_eqn(lm(TEQUILA~`IMPORTED VODKA - MISC`,gr_date_cat.spread[c(64,39)])),
-            parse = TRUE, size = 3)
+            label = lm_eqn(lm(TEQUILA~`IMPORTED VODKA - MISC`,
+                              gr_date_cat.spread[c(64,39)])),
+                                 parse = TRUE, size = 3)
 
 
-test4 <- ggplot(data=gr_date_cat.spread[,c(64,33)],aes(x=`HIGH PROOF BEER`, y=TEQUILA)) +
+test4 <- ggplot(data=gr_date_cat.spread[,c(64,33)],
+                aes(x=`HIGH PROOF BEER`, y=TEQUILA)) +
   geom_point() +
   geom_smooth(method=lm, colour="red") +  
   geom_text(x = 5, y = 15000, 
-            label = lm_eqn(lm(TEQUILA~`HIGH PROOF BEER`,gr_date_cat.spread[c(64,33)])),
-            parse = TRUE, size = 3)
+            label = lm_eqn(lm(TEQUILA~`HIGH PROOF BEER`,
+                              gr_date_cat.spread[c(64,33)])),
+                                parse = TRUE, size = 3)
 
-test5 <- ggplot(data=gr_date_cat.spread[,c(64,48)],aes(x=`PEACH BRANDIES`, y=TEQUILA)) +
+test5 <- ggplot(data=gr_date_cat.spread[,c(64,48)],
+                aes(x=`PEACH BRANDIES`, y=TEQUILA)) +
   geom_point() +
   geom_smooth(method=lm, colour="red") +  
   geom_text(x = 500, y = 10000, 
-            label = lm_eqn(lm(TEQUILA~`PEACH BRANDIES`,gr_date_cat.spread[c(64,48)])),
-            parse = TRUE, size = 3)
+            label = lm_eqn(lm(TEQUILA~`PEACH BRANDIES`,
+                              gr_date_cat.spread[c(64,48)])),
+                               parse = TRUE, size = 3)
 
-test6 <- ggplot(data=gr_date_cat.spread[,c(64,26)],aes(x=`DECANTERS & SPECIALTY PACKAGES`, y=TEQUILA)) +
+test6 <- ggplot(data=gr_date_cat.spread[,c(64,26)],
+                aes(x=`DECANTERS & SPECIALTY PACKAGES`, y=TEQUILA)) +
   geom_point() +
   geom_smooth(method=lm, colour="red") +  
   geom_text(x = 5000, y = 12000, 
@@ -1160,21 +1223,25 @@ Out of curiosity, let's produce the relevant displays for 80 proof vodka.
 
 ```{r echo=FALSE, VODcors, fig.width=12, fig.height=9, warning=FALSE, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 
-test1 <- ggplot(data=gr_date_cat.spread[,c(4,59)],aes(x=`SPICED RUM`, y=`80 PROOF VODKA`)) +
+test1 <- ggplot(data=gr_date_cat.spread[,c(4,59)],
+                aes(x=`SPICED RUM`, y=`80 PROOF VODKA`)) +
   geom_point() +
   geom_smooth(method=lm) +  
   geom_text(x = 1500, y = 40000, 
-            label = lm_eqn(lm(`80 PROOF VODKA`~`SPICED RUM`,gr_date_cat.spread[c(4,59)])),
+            label = lm_eqn(lm(`80 PROOF VODKA`~`SPICED RUM`,
+                              gr_date_cat.spread[c(4,59)])),
             parse = TRUE, size = 3)
 
-test2 <- ggplot(data=gr_date_cat.spread[,c(4,51)],aes(x=`PUERTO RICO & VIRGIN ISLANDS RUM`, y=`80 PROOF VODKA`)) +
+test2 <- ggplot(data=gr_date_cat.spread[,c(4,51)],
+                aes(x=`PUERTO RICO & VIRGIN ISLANDS RUM`, y=`80 PROOF VODKA`)) +
   geom_point() +
   geom_smooth(method=lm) +  
   geom_text(x = 1500, y = 40000, 
                 label = lm_eqn(lm(`80 PROOF VODKA`~`PUERTO RICO & VIRGIN ISLANDS RUM`,gr_date_cat.spread[c(4,51)])),
                 parse = TRUE, size = 3)
 
-test3 <- ggplot(data=gr_date_cat.spread[,c(4,60)],aes(x=`STRAIGHT BOURBON WHISKIES`, y=`80 PROOF VODKA`)) +
+test3 <- ggplot(data=gr_date_cat.spread[,c(4,60)],
+                aes(x=`STRAIGHT BOURBON WHISKIES`, y=`80 PROOF VODKA`)) +
   geom_point() +
   geom_smooth(method=lm) +  
   geom_text(x = 1500, y = 40000, 
@@ -1182,21 +1249,26 @@ test3 <- ggplot(data=gr_date_cat.spread[,c(4,60)],aes(x=`STRAIGHT BOURBON WHISKI
             parse = TRUE, size = 3)
 
 
-test4 <- ggplot(data=gr_date_cat.spread[,c(4,33)],aes(x=`HIGH PROOF BEER`, y=`80 PROOF VODKA`)) +
+test4 <- ggplot(data=gr_date_cat.spread[,c(4,33)],
+                aes(x=`HIGH PROOF BEER`, y=`80 PROOF VODKA`)) +
   geom_point() +
   geom_smooth(method=lm, colour="red") +  
   geom_text(x = 5, y = 15000, 
-            label = lm_eqn(lm(`80 PROOF VODKA`~`HIGH PROOF BEER`,gr_date_cat.spread[c(4,33)])),
+            label = lm_eqn(lm(`80 PROOF VODKA`~`HIGH PROOF BEER`,
+                              gr_date_cat.spread[c(4,33)])),
             parse = TRUE, size = 3)
 
-test5 <- ggplot(data=gr_date_cat.spread[,c(4,48)],aes(x=`PEACH BRANDIES`, y=`80 PROOF VODKA`)) +
+test5 <- ggplot(data=gr_date_cat.spread[,c(4,48)],
+                aes(x=`PEACH BRANDIES`, y=`80 PROOF VODKA`)) +
   geom_point() +
   geom_smooth(method=lm, colour="red") +  
   geom_text(x = 500, y = 10000, 
-            label = lm_eqn(lm(`80 PROOF VODKA`~`PEACH BRANDIES`,gr_date_cat.spread[c(4,48)])),
+            label = lm_eqn(lm(`80 PROOF VODKA`~`PEACH BRANDIES`,
+                              gr_date_cat.spread[c(4,48)])),
             parse = TRUE, size = 3)
 
-test6 <- ggplot(data=gr_date_cat.spread[,c(4,26)],aes(x=`DECANTERS & SPECIALTY PACKAGES`, y=`80 PROOF VODKA`)) +
+test6 <- ggplot(data=gr_date_cat.spread[,c(4,26)],
+                aes(x=`DECANTERS & SPECIALTY PACKAGES`, y=`80 PROOF VODKA`)) +
   geom_point() +
   geom_smooth(method=lm, colour="red") +  
   geom_text(x = 5000, y = 12000, 
@@ -1215,14 +1287,23 @@ Spiced rum, Puerto Rico rum and straight bourbon whiskies are the highest positi
 ### Plot One
 ```{r echo=FALSE, Plot_One, fig.width=12, fig.height=9, cache=TRUE, cache.path='cache/', fig.path='figure/'}
 gr_date.Jan_May_v2 <- gr_date.Jan_May
-gr_date.Jan_May_v2$type <- sapply(gr_date.Jan_May_v2$type, function(x) ifelse(x=="BOTTLES", "1. raw quantities", "2. population-adjusted quantities"))
-ggplot(data=gr_date.Jan_May_v2,aes(x=DATE, y=bottles/maxbottles, colour=type)) + 
+gr_date.Jan_May_v2$type <-
+  sapply(gr_date.Jan_May_v2$type, 
+         function(x) ifelse(x=="BOTTLES", "1. raw quantities", 
+                            "2. population-adjusted quantities"))
+ggplot(data=gr_date.Jan_May_v2,
+       aes(x=DATE, y=bottles/maxbottles, colour=type)) + 
   geom_point()+ geom_line() +
   geom_ribbon(aes(ymin=0, ymax=bottles/maxbottles, fill=type)) +
   scale_fill_brewer(palette="Set3")+
-  labs(x="Date", y = "Bottles", title = "Time-series of bottle quantities ordered")+
+  labs(x="Date", y = "Bottles", 
+       title = "Time-series of bottle quantities ordered")+
   theme(panel.background = element_rect(fill = 'white'),
-        plot.title = element_text(size = rel(1), colour = "blue")) + geom_vline(xintercept=as.numeric(gr_date.Jan_May[weekdays(gr_date.Jan_May$DATE)=="Tuesday",]$DATE), linetype=4, alpha=0.4)
+        plot.title = element_text(size = rel(1), colour = "blue")) +
+  geom_vline(xintercept=
+               as.numeric(gr_date.Jan_May[weekdays(gr_date.Jan_May$DATE)==
+                                            "Tuesday",]$DATE), linetype=4, 
+                                              alpha=0.4)
 ```
 
 ### Description One
@@ -1240,7 +1321,9 @@ It is clear that when the quantities were population-adjusted, a clear periodica
 #Number of reports per month and num. of participating stores overlay
 ggplot(data=gr_st_month_count, aes(x=month, y=count_reps)) + 
   stat_boxplot(geom='errorbar') + geom_jitter(alpha=0.2) + 
-  geom_boxplot(aes(fill=part_stores), outlier.size=0) +
+  geom_boxplot(aes(fill=part_stores), outlier.size=0, alpha=0.6) +
+  scale_fill_gradientn("# of \n participating \n stores", 
+                       colours=topo.colors(10))+
   coord_cartesian(ylim = c(0, 1000)) +
   theme(panel.background = element_rect(fill = 'white'),
         panel.grid.major = element_blank(),
